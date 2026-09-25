@@ -391,6 +391,7 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 
 		// Return early if middleware requests stop
 		if shouldStop {
+			log.Printf("DEBUG: executeRequest - Returning result with identifier='%s' (shouldStop=true)", identifier)
 			return Result{
 				Target:     target,
 				Status:     resp.StatusCode,
@@ -404,6 +405,7 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 	}
 
 	// Return result
+	log.Printf("DEBUG: executeRequest - Returning result with identifier='%s' (shouldStop=false)", identifier)
 	return Result{
 		Target:     target,
 		Status:     resp.StatusCode,
