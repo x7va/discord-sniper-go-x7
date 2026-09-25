@@ -375,38 +375,17 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 
 	// Process response through middleware
 	var identifier string
+	var shouldStop bool
+	var shouldRotate bool
+	var delay time.Duration
+
 	if s.middleware != nil {
-		identifier, shouldStop, shouldRotate, delay := s.middleware.ProcessResponse(resp, responseBody, nil)
-
-		// Apply rate limiting delay if needed
-		if delay > 0 {
-			s.middleware.ApplyDelay(delay)
-		}
-
-		// Rotate credentials if requested
-		if shouldRotate {
-			s.middleware.RotateCredentials()
-			s.metrics.IncrementProxySwitches()
-		}
-
-		// Return early if middleware requests stop
-		if shouldStop {
-			log.Printf("DEBUG: executeRequest - Returning result with identifier='%s' (shouldStop=true)", identifier)
-			return Result{
-				Target:     target,
-				Status:     resp.StatusCode,
-				Latency:    latency,
-				Error:      nil,
-				Proxy:      proxy,
-				Token:      TruncateToken(token, 10),
-				Identifier: identifier,
-			}
-		}
+		identifier, shouldStop, shouldRotate, delay = s.middleware.ProcessResponse(resp, responseBody, nil)
+		log.Printf("DEBUG: executeRequest - Middleware returned identifier='%s', shouldStop=%v, delay=%v", identifier, shouldStop, delay)
 	}
 
-	// Return result
-	log.Printf("DEBUG: executeRequest - Returning result with identifier='%s' (shouldStop=false)", identifier)
-	return Result{
+	// Create result immediately with identifier to prevent loss during delays
+	result := Result{
 		Target:     target,
 		Status:     resp.StatusCode,
 		Latency:    latency,
@@ -415,6 +394,23 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 		Token:      TruncateToken(token, 10),
 		Identifier: identifier,
 	}
+
+	// Apply rate limiting delay if needed (after result is created)
+	if delay > 0 {
+		log.Printf("DEBUG: executeRequest - Applying delay with identifier='%s'", identifier)
+		s.middleware.ApplyDelay(delay)
+	}
+
+	// Rotate credentials if requested (after result is created)
+	if shouldRotate {
+		log.Printf("DEBUG: executeRequest - Rotating credentials with identifier='%s'", identifier)
+		s.middleware.RotateCredentials()
+		s.metrics.IncrementProxySwitches()
+	}
+
+	// Return result with preserved identifier
+	log.Printf("DEBUG: executeRequest - Returning result with identifier='%s' (shouldStop=%v)", result.Identifier, shouldStop)
+	return result
 }
 
 // TruncateToken returns a truncated version of the token for logging purposes.
