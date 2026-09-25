@@ -216,9 +216,7 @@ func interactiveConfig() Config {
 			"username": "TARGET_PLACEHOLDER",
 		},
 		Headers: map[string]string{
-			"Content-Type": "Application/json",
-			"Orgin":        "https://discord.com/",
-			"User-Agent":   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+			"Orgin": "https://discord.com/",
 		},
 	}
 

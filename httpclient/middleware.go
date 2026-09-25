@@ -136,8 +136,6 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 	if len(body) > 0 {
 		var discordResponse map[string]interface{}
 		if err := json.Unmarshal(body, &discordResponse); err == nil {
-			log.Printf("DEBUG: Discord response: %s", string(body))
-
 			// EXACT logic from working Python checker:
 			// Only process if "taken" field exists
 			if taken, exists := discordResponse["taken"]; exists {

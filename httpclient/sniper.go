@@ -325,13 +325,14 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 		}
 	}
 
-	// Set headers
+	// Set headers - match Python code exactly
 	if token != "" {
 		req.Header.Set("Authorization", token)
 	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
+	// Always set Content-Type like Python code (not conditional on body)
+	req.Header.Set("Content-Type", "Application/json")
+	// Set User-Agent to match Python code
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 	for key, value := range s.config.Headers {
 		req.Header.Set(key, value)
 	}
