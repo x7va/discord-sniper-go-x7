@@ -136,15 +136,6 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 	if len(body) > 0 {
 		var discordResponse map[string]interface{}
 		if err := json.Unmarshal(body, &discordResponse); err == nil {
-			// Try to extract username from response for correlation
-			username := "unknown"
-			if uname, exists := discordResponse["username"]; exists {
-				if unameStr, ok := uname.(string); ok {
-					username = unameStr
-				}
-			}
-			log.Printf("DEBUG: Discord response for username %s: %s", username, string(body))
-
 			// EXACT logic from working x7va JavaScript checker:
 			// taken defaults to true if field is missing
 			var taken bool = true // Default to taken (safer)
@@ -334,7 +325,6 @@ func (m *Middleware) ProcessResponse(resp *http.Response, body []byte, err error
 	// Check for rate limit FIRST (like Python code)
 	if statusCode == http.StatusTooManyRequests {
 		delay, shouldRotate := m.HandleRateLimit(resp)
-		log.Printf("DEBUG: ProcessResponse - Rate limit detected, returning empty identifier")
 		return "", false, shouldRotate, delay
 	}
 
