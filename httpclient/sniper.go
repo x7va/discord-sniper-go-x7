@@ -311,6 +311,7 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 				Error:   fmt.Errorf("failed to marshal JSON payload: %w", err),
 			}
 		}
+		log.Printf("DEBUG: Sending request for username %s with payload: %s", target, string(jsonData))
 		body = bytes.NewReader(jsonData)
 	}
 

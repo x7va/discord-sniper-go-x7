@@ -136,6 +136,8 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 	if len(body) > 0 {
 		var discordResponse map[string]interface{}
 		if err := json.Unmarshal(body, &discordResponse); err == nil {
+			log.Printf("DEBUG: Discord response for username: %s", string(body))
+
 			// EXACT logic from working Python checker:
 			// Only process if "taken" field exists
 			if taken, exists := discordResponse["taken"]; exists {
@@ -160,7 +162,7 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 				return "error", false
 			}
 		} else {
-			log.Printf("ERROR: Failed to parse Discord response: %v", err)
+			log.Printf("ERROR: Failed to parse Discord response: %v, raw body: %s", err, string(body))
 			return "error", false
 		}
 	}
