@@ -234,7 +234,8 @@ func interactiveConfig() Config {
 		config.GenerateUsernames = true
 		config.UsernameCount = 100
 		config.UsernameLength = 4
-		fmt.Println("Auto-filled: proxies=y, tokens=y, generate=y, count=100, length=4")
+		config.StopOnSuccess = true
+		fmt.Println("Auto-filled: proxies=y, tokens=y, generate=y, count=100, length=4, stop=y")
 	} else {
 		config.UseProxies = (useProxies == "y" || useProxies == "Y")
 
@@ -270,11 +271,13 @@ func interactiveConfig() Config {
 		config.Workers = workers
 	}
 
-	// Stop on success
-	fmt.Print("Stop on first success? (y/n): ")
-	var stopOnSuccess string
-	fmt.Scanln(&stopOnSuccess)
-	config.StopOnSuccess = (stopOnSuccess == "y" || stopOnSuccess == "Y")
+	// Stop on success (only prompt if not using quick setup)
+	if !(useProxies == "x" || useProxies == "X") {
+		fmt.Print("Stop on first success? (y/n): ")
+		var stopOnSuccess string
+		fmt.Scanln(&stopOnSuccess)
+		config.StopOnSuccess = (stopOnSuccess == "y" || stopOnSuccess == "Y")
+	}
 
 	fmt.Println("\n=== Configuration Summary ===")
 	fmt.Printf("Proxies: %v\n", config.UseProxies)
