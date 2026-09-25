@@ -136,7 +136,7 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 	if len(body) > 0 {
 		var discordResponse map[string]interface{}
 		if err := json.Unmarshal(body, &discordResponse); err == nil {
-			// Try to extract username from response for logging
+			// Try to extract username from response for correlation
 			username := "unknown"
 			if uname, exists := discordResponse["username"]; exists {
 				if unameStr, ok := uname.(string); ok {
@@ -159,12 +159,10 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 			if available {
 				// Username is available (taken = false or missing)
 				log.Printf("SUCCESS: Username is available (taken=%v)", taken)
-				log.Printf("DEBUG: HandleSuccess - Returning identifier='available'")
 				return "available", m.config.StopOnSuccess
 			} else {
 				// Username is taken (taken = true)
 				log.Printf("INFO: Username is taken (taken=%v)", taken)
-				log.Printf("DEBUG: HandleSuccess - Returning identifier='taken'")
 				return "taken", false
 			}
 		} else {
@@ -343,11 +341,9 @@ func (m *Middleware) ProcessResponse(resp *http.Response, body []byte, err error
 	// Process Discord username response regardless of status code
 	// Python code processes JSON response for username checking regardless of status
 	identifier, shouldStopSuccess := m.HandleSuccess(resp, body)
-	log.Printf("DEBUG: ProcessResponse - HandleSuccess returned identifier='%s', shouldStop=%v", identifier, shouldStopSuccess)
 
 	if identifier != "" {
 		// If we got an identifier (available, taken, or error), use it
-		log.Printf("DEBUG: ProcessResponse - Returning identifier='%s'", identifier)
 		return identifier, shouldStopSuccess, false, 0
 	}
 
@@ -358,7 +354,6 @@ func (m *Middleware) ProcessResponse(resp *http.Response, body []byte, err error
 	}
 
 	// Non-success, non-error response (e.g., 3xx redirects)
-	log.Printf("DEBUG: ProcessResponse - No identifier, returning empty for status %d", statusCode)
 	return "", false, false, 0
 }
 
