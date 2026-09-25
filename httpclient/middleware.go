@@ -149,15 +149,12 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 
 			if available {
 				// Username is available (taken = false or missing)
-				log.Printf("SUCCESS: Username is available (taken=%v)", taken)
 				return "available", m.config.StopOnSuccess
 			} else {
 				// Username is taken (taken = true)
-				log.Printf("INFO: Username is taken (taken=%v)", taken)
 				return "taken", false
 			}
 		} else {
-			log.Printf("ERROR: Failed to parse Discord response: %v, raw body: %s", err, string(body))
 			return "error", false
 		}
 	}
@@ -172,7 +169,6 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 				identifier = fmt.Sprintf("status_%d", statusCode)
 			}
 
-			log.Printf("SUCCESS: Status %d - Identifier: %s", statusCode, identifier)
 			return identifier, m.config.StopOnSuccess
 		}
 	}
@@ -194,7 +190,6 @@ func (m *Middleware) HandleRateLimit(resp *http.Response) (delay time.Duration, 
 		// Retry-After can be either seconds (number) or HTTP date
 		if seconds, err := strconv.Atoi(retryAfter); err == nil {
 			delay = time.Duration(seconds) * time.Second
-			log.Printf("RATE LIMIT: Retry-After header indicates %d second delay", seconds)
 		} else {
 			// Try parsing as HTTP date
 			if retryTime, err := http.ParseTime(retryAfter); err == nil {
@@ -202,16 +197,13 @@ func (m *Middleware) HandleRateLimit(resp *http.Response) (delay time.Duration, 
 				if delay < 0 {
 					delay = 0
 				}
-				log.Printf("RATE LIMIT: Retry-After header indicates delay until %v", retryTime)
 			} else {
-				log.Printf("RATE LIMIT: Invalid Retry-After header '%s', using default backoff", retryAfter)
 				delay = m.config.RateLimitBackoff
 			}
 		}
 	} else {
 		// No Retry-After header, use default backoff
 		delay = m.config.RateLimitBackoff
-		log.Printf("RATE LIMIT: No Retry-After header, using default %v backoff", delay)
 	}
 
 	// Record the rate limit error
@@ -220,7 +212,6 @@ func (m *Middleware) HandleRateLimit(resp *http.Response) (delay time.Duration, 
 	// Determine if rotation should occur
 	shouldRotate = m.config.EnableAutoRotation
 	if shouldRotate {
-		log.Printf("RATE LIMIT: Triggering proxy/token rotation")
 	}
 
 	return delay, shouldRotate
@@ -234,16 +225,12 @@ func (m *Middleware) HandleError(statusCode int, err error) (shouldContinue bool
 
 	// Check if error rate exceeds threshold (but don't stop execution, just warn)
 	if m.config.MaxErrorRate > 0 && m.errorTracker.IsRateLimitExceeded(m.config.MaxErrorRate) {
-		log.Printf("WARNING: Error rate %.2f/min exceeds max %d/min (continuing)",
-			m.errorTracker.GetErrorRate(), m.config.MaxErrorRate)
 		// Don't stop execution - continue despite high error rate
 	}
 
 	// Log the error
 	if err != nil {
-		log.Printf("ERROR: Status %d - %v", statusCode, err)
 	} else {
-		log.Printf("ERROR: Status %d", statusCode)
 	}
 
 	// Always continue execution - let user decide when to stop
@@ -275,7 +262,6 @@ func (m *Middleware) extractIdentifier(body []byte, key string) string {
 // This is called when rate limiting is detected to respect server limits.
 func (m *Middleware) ApplyDelay(delay time.Duration) {
 	if delay > 0 {
-		log.Printf("Applying rate limit delay: %v", delay)
 		time.Sleep(delay)
 	}
 }
@@ -288,26 +274,8 @@ func (m *Middleware) RotateCredentials() {
 
 	if m.rotator != nil {
 		// Rotate to next proxy and token
-		proxy := m.rotator.NextProxy()
-		token := m.rotator.NextToken()
-		log.Printf("Credentials rotated - Proxy count: %d, Token count: %d",
-			m.rotator.ProxyCount(), m.rotator.TokenCount())
-
-		// Print proxy switch notification
-		if proxy != "" {
-			truncatedProxy := proxy
-			if len(proxy) > 20 {
-				truncatedProxy = proxy[:20] + "..."
-			}
-			PrintProxySwitch("Rotated to proxy: %s", truncatedProxy)
-		}
-		if token != "" {
-			truncatedToken := token
-			if len(token) > 10 {
-				truncatedToken = token[:10] + "..."
-			}
-			PrintProxySwitch("Rotated to token: %s", truncatedToken)
-		}
+		m.rotator.NextProxy()
+		m.rotator.NextToken()
 	}
 }
 

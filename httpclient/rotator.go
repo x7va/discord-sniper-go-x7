@@ -3,7 +3,6 @@ package httpclient
 import (
 	"bufio"
 	"context"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -42,12 +41,9 @@ func NewRotator(proxyFile, tokenFile string) (*Rotator, error) {
 	if proxyFile != "" {
 		proxies, err := loadProxies(proxyFile)
 		if err != nil {
-			log.Printf("Warning: Failed to load proxies from %s: %v", proxyFile, err)
 		} else if len(proxies) == 0 {
-			log.Printf("Warning: %s is empty, no proxies will be used", proxyFile)
 		} else {
 			r.proxies = proxies
-			log.Printf("Loaded %d proxies from %s", len(proxies), proxyFile)
 		}
 	}
 
@@ -55,12 +51,9 @@ func NewRotator(proxyFile, tokenFile string) (*Rotator, error) {
 	if tokenFile != "" {
 		tokens, err := loadTokens(tokenFile)
 		if err != nil {
-			log.Printf("Warning: Failed to load tokens from %s: %v", tokenFile, err)
 		} else if len(tokens) == 0 {
-			log.Printf("Warning: %s is empty, no tokens will be used", tokenFile)
 		} else {
 			r.tokens = tokens
-			log.Printf("Loaded %d tokens from %s", len(tokens), tokenFile)
 		}
 	}
 
@@ -94,14 +87,12 @@ func loadProxies(filename string) ([]string, error) {
 		// Validate proxy URL format
 		proxyURL, err := url.Parse(line)
 		if err != nil {
-			log.Printf("Warning: Invalid proxy URL '%s': %v", line, err)
 			continue
 		}
 
 		// Check for supported proxy schemes
 		scheme := strings.ToLower(proxyURL.Scheme)
 		if scheme != "http" && scheme != "https" && scheme != "socks5" && scheme != "socks4" {
-			log.Printf("Warning: Unsupported proxy scheme '%s' in '%s'", scheme, line)
 			continue
 		}
 
@@ -109,7 +100,6 @@ func loadProxies(filename string) ([]string, error) {
 		if scheme == "socks4" {
 			// Convert socks4:// to socks5:// - many proxies support both protocols
 			converted := strings.Replace(line, "socks4://", "socks5://", 1)
-			log.Printf("Converting SOCKS4 to SOCKS5: %s -> %s", line, converted)
 			proxies = append(proxies, converted)
 		} else {
 			proxies = append(proxies, line)

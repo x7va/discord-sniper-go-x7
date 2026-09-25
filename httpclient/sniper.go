@@ -132,23 +132,19 @@ func (s *Sniper) LoadTargets(filename string) error {
 	}
 
 	s.targets = targets
-	log.Printf("Loaded %d targets from %s", len(targets), filename)
 	return nil
 }
 
 // SetTargets directly sets the targets from a slice (for random username generation)
 func (s *Sniper) SetTargets(targets []string) {
 	s.targets = targets
-	log.Printf("Set %d targets for execution", len(targets))
 }
 
 // SetProxyUsage sets whether proxies are being used
 func (s *Sniper) SetProxyUsage(useProxies bool) {
 	s.useProxies = useProxies
 	if !useProxies {
-		log.Printf("Proxy usage disabled - using %d second delay between requests", s.config.RequestDelay)
 	} else {
-		log.Printf("Proxy usage enabled - concurrent execution")
 	}
 }
 
@@ -225,18 +221,35 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 			if result.Identifier == "available" {
 				s.metrics.IncrementAvailableStatus()
 				s.metrics.IncrementSuccessfulClaims()
-				// Clean success message like the example
-				PrintSuccess("@%s claimed by @%s", result.Target, TruncateToken(result.Token, 10))
+				// Format: [Available] username RPS: X/s | resp: {'taken': False} | proxy: address
+				elapsed := time.Since(s.metrics.StartTime)
+				var rps float64
+				if elapsed.Seconds() > 0 {
+					rps = float64(s.metrics.TotalChecks.Load()) / elapsed.Seconds()
+				}
+				proxyAddr := result.Proxy
+				if len(proxyAddr) > 30 {
+					proxyAddr = proxyAddr[:30]
+				}
+				fmt.Printf("%s[Available]%s %s RPS: %.0f/s | resp: {'taken': False} | proxy: %s\n", Green, Reset, result.Target, rps, proxyAddr)
 			} else if result.Identifier == "taken" {
-				// Username is taken, don't log (keep output clean)
+				// Format: [Taken] username RPS: X/s | resp: {'taken': True} | proxy: address
+				elapsed := time.Since(s.metrics.StartTime)
+				var rps float64
+				if elapsed.Seconds() > 0 {
+					rps = float64(s.metrics.TotalChecks.Load()) / elapsed.Seconds()
+				}
+				proxyAddr := result.Proxy
+				if len(proxyAddr) > 30 {
+					proxyAddr = proxyAddr[:30]
+				}
+				fmt.Printf("%s[Taken]%s %s RPS: %.0f/s | resp: {'taken': True} | proxy: %s\n", Red, Reset, result.Target, rps, proxyAddr)
 			} else if result.Identifier == "error" {
 				// Discord returned an error response
 				s.metrics.IncrementErrors()
-				PrintError("Discord API error for @%s", result.Target)
 			} else if result.Status == 429 {
 				// Check for rate limits
 				s.metrics.IncrementRateLimits()
-				PrintRateLimit("Rate limited on @%s", result.Target)
 			} else if result.Status >= 200 && result.Status < 300 {
 				// Generic success response for non-Discord APIs
 				s.metrics.IncrementAvailableStatus()
@@ -350,7 +363,6 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 		if s.middleware != nil {
 			_, shouldStop, _, _ := s.middleware.ProcessResponse(nil, nil, err)
 			if shouldStop {
-				log.Printf("Middleware requested stop due to error threshold")
 			}
 		}
 		return Result{
@@ -365,7 +377,6 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 	// Read response body for middleware processing
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("Warning: Failed to read response body: %v", err)
 		responseBody = []byte{}
 	}
 
