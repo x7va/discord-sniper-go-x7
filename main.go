@@ -217,7 +217,7 @@ func interactiveConfig() Config {
 		},
 		Headers: map[string]string{
 			"Content-Type": "Application/json",
-			"Origin":       "https://discord.com/",
+			"Orgin":        "https://discord.com/",
 			"User-Agent":   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 		},
 	}

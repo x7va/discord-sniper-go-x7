@@ -131,46 +131,46 @@ func NewMiddleware(config MiddlewareConfig, rotator *Rotator) *Middleware {
 func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier string, shouldStop bool) {
 	statusCode := resp.StatusCode
 
+	// For Discord username checking, parse the JSON response to check "taken" field
+	// Python code doesn't check status codes for this - it processes JSON regardless
+	if len(body) > 0 {
+		var discordResponse map[string]interface{}
+		if err := json.Unmarshal(body, &discordResponse); err == nil {
+			log.Printf("DEBUG: Discord response: %s", string(body))
+
+			// EXACT logic from working Python checker:
+			// Only process if "taken" field exists
+			if taken, exists := discordResponse["taken"]; exists {
+				if takenBool, ok := taken.(bool); ok {
+					if !takenBool {
+						// Username is available (taken = false)
+						log.Printf("SUCCESS: Username is available (taken=false)")
+						return "available", m.config.StopOnSuccess
+					} else {
+						// Username is taken (taken = true)
+						log.Printf("INFO: Username is taken (taken=true)")
+						return "taken", false
+					}
+				}
+			} else {
+				// If "taken" field doesn't exist, it's an error (per Python logic)
+				if message, exists := discordResponse["message"]; exists {
+					log.Printf("ERROR: Error validating username: %v", message)
+				} else {
+					log.Printf("ERROR: Unknown response format - no 'taken' field")
+				}
+				return "error", false
+			}
+		} else {
+			log.Printf("ERROR: Failed to parse Discord response: %v", err)
+			return "error", false
+		}
+	}
+
+	// Fallback to original behavior for non-Discord responses
 	// Check if this is a success status code
 	for _, code := range m.config.SuccessStatusCodes {
 		if statusCode == code {
-			// For Discord username checking, parse the JSON response to check "taken" field
-			if len(body) > 0 {
-				var discordResponse map[string]interface{}
-				if err := json.Unmarshal(body, &discordResponse); err == nil {
-					log.Printf("DEBUG: Discord response: %s", string(body))
-
-					// Check if "taken" field exists
-					if taken, exists := discordResponse["taken"]; exists {
-						if takenBool, ok := taken.(bool); ok {
-							if !takenBool {
-								// Username is available (taken = false)
-								log.Printf("SUCCESS: Username is available (taken=false)")
-								return "available", m.config.StopOnSuccess
-							} else {
-								// Username is taken (taken = true)
-								log.Printf("INFO: Username is taken (taken=true)")
-								return "taken", false
-							}
-						}
-					} else {
-						// If "taken" field doesn't exist, this might be an error response
-						// Check for error message field
-						if message, exists := discordResponse["message"]; exists {
-							log.Printf("ERROR: Discord returned error: %v", message)
-							return "error", false
-						}
-						// If no "taken" field and no error, treat as taken (safer default)
-						log.Printf("INFO: No 'taken' field in response, assuming username is taken")
-						return "taken", false
-					}
-				} else {
-					log.Printf("ERROR: Failed to parse Discord response: %v", err)
-					return "error", false
-				}
-			}
-
-			// Fallback to original behavior for non-Discord responses
 			if m.config.SuccessIdentifierKey != "" && len(body) > 0 {
 				identifier = m.extractIdentifier(body, m.config.SuccessIdentifierKey)
 			} else {
@@ -182,6 +182,7 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 		}
 	}
 
+	// Return empty identifier for non-success status codes
 	return "", false
 }
 
@@ -326,18 +327,21 @@ func (m *Middleware) ProcessResponse(resp *http.Response, body []byte, err error
 
 	statusCode := resp.StatusCode
 
-	// Check for success
-	if identifier, shouldStop := m.HandleSuccess(resp, body); shouldStop {
-		return identifier, true, false, 0
-	}
-
-	// Check for rate limit
+	// Check for rate limit FIRST (like Python code)
 	if statusCode == http.StatusTooManyRequests {
 		delay, shouldRotate := m.HandleRateLimit(resp)
 		return "", false, shouldRotate, delay
 	}
 
-	// Handle other error status codes
+	// Process Discord username response regardless of status code
+	// Python code processes JSON response for username checking regardless of status
+	identifier, shouldStopSuccess := m.HandleSuccess(resp, body)
+	if identifier != "" {
+		// If we got an identifier (available, taken, or error), use it
+		return identifier, shouldStopSuccess, false, 0
+	}
+
+	// Handle other error status codes (if not already handled above)
 	if statusCode >= 400 {
 		shouldContinue := m.HandleError(statusCode, nil)
 		return "", !shouldContinue, false, 0
