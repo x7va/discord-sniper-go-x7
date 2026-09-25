@@ -188,19 +188,19 @@ func PrintError(format string, args ...interface{}) {
 // PrintCritical prints a critical error message in red with bold without timestamp (cleaner).
 func PrintCritical(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s[CRITICAL] %s%s%s\n", Red+Bold, msg, Reset)
+	fmt.Printf("%s[CRITICAL] %s%s\n", Red+Bold, msg, Reset)
 }
 
 // PrintStatus prints a status message in cyan without timestamp (cleaner).
 func PrintStatus(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s[INFO] %s%s\n", Cyan, msg, Reset)
+	fmt.Printf("%s%s\n", Cyan, msg)
 }
 
 // PrintInfo prints an informational message in white without timestamp (cleaner).
 func PrintInfo(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s[INFO] %s%s\n", White, msg, Reset)
+	fmt.Printf("%s\n", msg)
 }
 
 // PrintProgress prints a progress indicator.

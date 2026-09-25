@@ -38,6 +38,9 @@ type Config struct {
 }
 
 func main() {
+	// Clear screen for clean output
+	httpclient.ClearScreen()
+
 	// Interactive configuration menu (no logo)
 	config := interactiveConfig()
 
