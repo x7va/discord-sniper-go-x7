@@ -228,6 +228,19 @@ func interactiveConfig() Config {
 	var useProxies string
 	fmt.Scanln(&useProxies)
 
+	// Check if working_proxies.txt exists and offer to use it
+	if useProxies == "y" || useProxies == "Y" {
+		if _, err := os.Stat("working_proxies.txt"); err == nil {
+			fmt.Print("Found working_proxies.txt from proxy check. Use it? (y/n, default: y): ")
+			var useWorking string
+			fmt.Scanln(&useWorking)
+			if useWorking == "" || useWorking == "y" || useWorking == "Y" {
+				config.ProxyFile = "working_proxies.txt"
+				fmt.Println("Using working_proxies.txt")
+			}
+		}
+	}
+
 	// Check for quick setup shortcut
 	if useProxies == "x" || useProxies == "X" {
 		fmt.Println("Quick setup activated!")
@@ -369,6 +382,7 @@ func runProxyCheck() {
 	working := 0
 	failed := 0
 	workers := 10
+	var workingProxies []string
 
 	semaphore := make(chan struct{}, workers)
 
@@ -410,6 +424,7 @@ func runProxyCheck() {
 
 			mu.Lock()
 			working++
+			workingProxies = append(workingProxies, p)
 			fmt.Printf("%s[WORKING]%s %s - Status: %d\n", httpclient.Green, httpclient.Reset, p, resp.StatusCode)
 			mu.Unlock()
 		}(proxyStr)
@@ -420,6 +435,34 @@ func runProxyCheck() {
 	fmt.Printf("\n=== Results ===\n")
 	fmt.Printf("Total: %d | Working: %d | Failed: %d | Success Rate: %.1f%%\n",
 		len(proxies), working, failed, float64(working)/float64(len(proxies))*100)
+
+	// Save working proxies to file
+	if working > 0 {
+		fmt.Print("\nSave working proxies to file? (y/n, default: y): ")
+		var save string
+		fmt.Scanln(&save)
+		if save == "" || save == "y" || save == "Y" {
+			fmt.Print("Output file path (default: working_proxies.txt): ")
+			var outputFile string
+			fmt.Scanln(&outputFile)
+			if outputFile == "" {
+				outputFile = "working_proxies.txt"
+			}
+
+			file, err := os.Create(outputFile)
+			if err != nil {
+				fmt.Printf("Error creating output file: %v\n", err)
+				return
+			}
+			defer file.Close()
+
+			for _, proxy := range workingProxies {
+				file.WriteString(proxy + "\n")
+			}
+
+			fmt.Printf("Saved %d working proxies to %s\n", working, outputFile)
+		}
+	}
 }
 
 // isValidDiscordUsername validates a username against Discord's requirements:
