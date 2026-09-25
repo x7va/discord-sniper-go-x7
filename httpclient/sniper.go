@@ -220,35 +220,36 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 		s.metrics.IncrementTotalChecks()
 
 		if result.Error == nil {
-			if result.Status >= 200 && result.Status < 300 {
-				// Check the identifier to determine if username is available or taken
-				if result.Identifier == "available" {
-					s.metrics.IncrementAvailableStatus()
-					s.metrics.IncrementSuccessfulClaims()
-					// Detailed success message like the example
-					PrintSuccess("CLAIMED @%s in %.4fms via %s", result.Target, float64(result.Latency.Microseconds())/1000, TruncateToken(result.Token, 8))
-					fmt.Printf("%s[!] @%s is available!%s\n", Green, result.Target, Reset)
-				} else if result.Identifier == "taken" {
-					// Username is taken, just log it
-					PrintInfo("@%s is taken (%.4fms)", result.Target, float64(result.Latency.Microseconds())/1000)
-				} else if result.Identifier == "error" {
-					// Discord returned an error response
-					s.metrics.IncrementErrors()
-					PrintError("Discord API error for @%s", result.Target)
-				} else {
-					// Generic success response
-					s.metrics.IncrementAvailableStatus()
-					if result.Identifier != "" {
-						s.metrics.IncrementSuccessfulClaims()
-						PrintSuccess("CLAIMED @%s in %.4fms via %s", result.Target, float64(result.Latency.Microseconds())/1000, TruncateToken(result.Token, 8))
-					} else {
-						PrintAvailability("@%s is FREE! Dispatching claim (%.4fms)", result.Target, float64(result.Latency.Microseconds())/1000)
-					}
-				}
+			// For Discord username checking, check identifier FIRST regardless of status code
+			// This matches the Python code logic which processes JSON regardless of HTTP status
+			if result.Identifier == "available" {
+				s.metrics.IncrementAvailableStatus()
+				s.metrics.IncrementSuccessfulClaims()
+				// Detailed success message like the example
+				PrintSuccess("CLAIMED @%s in %.4fms via %s", result.Target, float64(result.Latency.Microseconds())/1000, TruncateToken(result.Token, 8))
+				fmt.Printf("%s[!] @%s is available!%s\n", Green, result.Target, Reset)
+			} else if result.Identifier == "taken" {
+				// Username is taken, just log it
+				PrintInfo("@%s is taken (%.4fms)", result.Target, float64(result.Latency.Microseconds())/1000)
+			} else if result.Identifier == "error" {
+				// Discord returned an error response
+				s.metrics.IncrementErrors()
+				PrintError("Discord API error for @%s", result.Target)
 			} else if result.Status == 429 {
+				// Check for rate limits
 				s.metrics.IncrementRateLimits()
 				PrintRateLimit("Rate limited on @%s", result.Target)
+			} else if result.Status >= 200 && result.Status < 300 {
+				// Generic success response for non-Discord APIs
+				s.metrics.IncrementAvailableStatus()
+				if result.Identifier != "" {
+					s.metrics.IncrementSuccessfulClaims()
+					PrintSuccess("CLAIMED @%s in %.4fms via %s", result.Target, float64(result.Latency.Microseconds())/1000, TruncateToken(result.Token, 8))
+				} else {
+					PrintAvailability("@%s is FREE! Dispatching claim (%.4fms)", result.Target, float64(result.Latency.Microseconds())/1000)
+				}
 			} else {
+				// Other HTTP errors
 				s.metrics.IncrementErrors()
 				PrintError("HTTP %d on @%s", result.Status, result.Target)
 			}
