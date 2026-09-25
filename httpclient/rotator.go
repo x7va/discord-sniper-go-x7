@@ -2,12 +2,17 @@ package httpclient
 
 import (
 	"bufio"
+	"context"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"sync"
+	"time"
+
+	"golang.org/x/net/proxy"
 )
 
 // Rotator manages round-robin distribution of proxies and tokens.
@@ -95,12 +100,20 @@ func loadProxies(filename string) ([]string, error) {
 
 		// Check for supported proxy schemes
 		scheme := strings.ToLower(proxyURL.Scheme)
-		if scheme != "http" && scheme != "https" && scheme != "socks5" {
+		if scheme != "http" && scheme != "https" && scheme != "socks5" && scheme != "socks4" {
 			log.Printf("Warning: Unsupported proxy scheme '%s' in '%s'", scheme, line)
 			continue
 		}
 
-		proxies = append(proxies, line)
+		// For SOCKS4, try to use it as SOCKS5 (many proxies support both)
+		if scheme == "socks4" {
+			// Convert socks4:// to socks5:// - many proxies support both protocols
+			converted := strings.Replace(line, "socks4://", "socks5://", 1)
+			log.Printf("Converting SOCKS4 to SOCKS5: %s -> %s", line, converted)
+			proxies = append(proxies, converted)
+		} else {
+			proxies = append(proxies, line)
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -203,14 +216,30 @@ func (r *Rotator) GetClientWithProxy() (*http.Client, error) {
 	r.cacheMu.RUnlock()
 
 	// Parse the proxy URL
-	proxy, err := url.Parse(proxyURL)
+	proxyURLParsed, err := url.Parse(proxyURL)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create a new transport with proxy configuration
 	transport := createOptimizedTransport()
-	transport.Proxy = http.ProxyURL(proxy)
+
+	// Handle SOCKS5 proxies with the golang.org/x/net/proxy package
+	if proxyURLParsed.Scheme == "socks5" {
+		socksDialer, err := proxy.SOCKS5("tcp", proxyURLParsed.Host, nil, &net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		})
+		if err != nil {
+			return nil, err
+		}
+		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return socksDialer.Dial(network, addr)
+		}
+	} else {
+		// For HTTP/HTTPS proxies, use standard proxy
+		transport.Proxy = http.ProxyURL(proxyURLParsed)
+	}
 
 	// Create a new client with the proxied transport
 	client := &http.Client{
