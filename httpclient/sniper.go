@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -159,7 +158,6 @@ func (s *Sniper) Results() <-chan Result {
 // The method blocks until all targets are processed, then closes the results channel.
 func (s *Sniper) Execute() {
 	if len(s.targets) == 0 {
-		log.Println("Warning: No targets loaded, nothing to execute")
 		close(s.resultsChan)
 		return
 	}
