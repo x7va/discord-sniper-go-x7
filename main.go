@@ -219,37 +219,50 @@ func interactiveConfig() Config {
 	}
 
 	fmt.Println("\n=== Interactive Configuration ===")
+	fmt.Println("Tip: Type 'x' for quick setup (proxies=y, tokens=y, generate=y, count=100, length=4)")
 
 	// Proxy selection
-	fmt.Print("Use proxies? (y/n): ")
+	fmt.Print("Use proxies? (y/n/x): ")
 	var useProxies string
 	fmt.Scanln(&useProxies)
-	config.UseProxies = (useProxies == "y" || useProxies == "Y")
 
-	// Token selection
-	fmt.Print("Use tokens? (y/n): ")
-	var useTokens string
-	fmt.Scanln(&useTokens)
-	config.UseTokens = (useTokens == "y" || useTokens == "Y")
+	// Check for quick setup shortcut
+	if useProxies == "x" || useProxies == "X" {
+		fmt.Println("Quick setup activated!")
+		config.UseProxies = true
+		config.UseTokens = true
+		config.GenerateUsernames = true
+		config.UsernameCount = 100
+		config.UsernameLength = 4
+		fmt.Println("Auto-filled: proxies=y, tokens=y, generate=y, count=100, length=4")
+	} else {
+		config.UseProxies = (useProxies == "y" || useProxies == "Y")
 
-	// Username generation vs file
-	fmt.Print("Generate random usernames? (y/n): ")
-	var generateUsernames string
-	fmt.Scanln(&generateUsernames)
-	config.GenerateUsernames = (generateUsernames == "y" || generateUsernames == "Y")
+		// Token selection
+		fmt.Print("Use tokens? (y/n): ")
+		var useTokens string
+		fmt.Scanln(&useTokens)
+		config.UseTokens = (useTokens == "y" || useTokens == "Y")
 
-	if config.GenerateUsernames {
-		fmt.Print("Number of usernames to generate: ")
-		fmt.Scanln(&config.UsernameCount)
-		fmt.Print("Username length (characters, min 2 for Discord): ")
-		fmt.Scanln(&config.UsernameLength)
-		if config.UsernameLength < 2 {
-			config.UsernameLength = 2 // Minimum for Discord
-			fmt.Println("Username length set to minimum of 2 for Discord compatibility")
+		// Username generation vs file
+		fmt.Print("Generate random usernames? (y/n): ")
+		var generateUsernames string
+		fmt.Scanln(&generateUsernames)
+		config.GenerateUsernames = (generateUsernames == "y" || generateUsernames == "Y")
+
+		if config.GenerateUsernames {
+			fmt.Print("Number of usernames to generate: ")
+			fmt.Scanln(&config.UsernameCount)
+			fmt.Print("Username length (characters, min 2 for Discord): ")
+			fmt.Scanln(&config.UsernameLength)
+			if config.UsernameLength < 2 {
+				config.UsernameLength = 2 // Minimum for Discord
+				fmt.Println("Username length set to minimum of 2 for Discord compatibility")
+			}
 		}
 	}
 
-	// Worker count
+	// Worker count (always prompt for this)
 	fmt.Printf("Worker count (default %d): ", config.Workers)
 	var workers int
 	fmt.Scanln(&workers)
