@@ -375,13 +375,11 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 
 	// Process response through middleware
 	var identifier string
-	var shouldStop bool
 	var shouldRotate bool
 	var delay time.Duration
 
 	if s.middleware != nil {
-		identifier, shouldStop, shouldRotate, delay = s.middleware.ProcessResponse(resp, responseBody, nil)
-		log.Printf("DEBUG: executeRequest - Middleware returned identifier='%s', shouldStop=%v, delay=%v", identifier, shouldStop, delay)
+		identifier, _, shouldRotate, delay = s.middleware.ProcessResponse(resp, responseBody, nil)
 	}
 
 	// Create result immediately with identifier to prevent loss during delays
@@ -397,19 +395,15 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 
 	// Apply rate limiting delay if needed (after result is created)
 	if delay > 0 {
-		log.Printf("DEBUG: executeRequest - Applying delay with identifier='%s'", identifier)
 		s.middleware.ApplyDelay(delay)
 	}
 
 	// Rotate credentials if requested (after result is created)
 	if shouldRotate {
-		log.Printf("DEBUG: executeRequest - Rotating credentials with identifier='%s'", identifier)
 		s.middleware.RotateCredentials()
 		s.metrics.IncrementProxySwitches()
 	}
 
-	// Return result with preserved identifier
-	log.Printf("DEBUG: executeRequest - Returning result with identifier='%s' (shouldStop=%v)", result.Identifier, shouldStop)
 	return result
 }
 
