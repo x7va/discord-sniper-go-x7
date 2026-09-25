@@ -259,6 +259,9 @@ func (r *Rotator) GetClientWithToken() (*http.Client, string) {
 func (r *Rotator) GetClientWithProxyAndToken() (*http.Client, string, string, error) {
 	// Get the current proxy before advancing (for logging purposes)
 	currentProxy := r.GetCurrentProxy()
+	if currentProxy == "" {
+		currentProxy = "direct"
+	}
 
 	client, err := r.GetClientWithProxy()
 	if err != nil {

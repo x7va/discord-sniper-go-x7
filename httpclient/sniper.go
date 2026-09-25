@@ -228,7 +228,9 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 					rps = float64(s.metrics.TotalChecks.Load()) / elapsed.Seconds()
 				}
 				proxyAddr := result.Proxy
-				if len(proxyAddr) > 30 {
+				if proxyAddr == "" {
+					proxyAddr = "direct"
+				} else if len(proxyAddr) > 30 {
 					proxyAddr = proxyAddr[:30]
 				}
 				fmt.Printf("%s[Available]%s %s RPS: %.0f/s | resp: {'taken': False} | proxy: %s\n", Green, Reset, result.Target, rps, proxyAddr)
@@ -240,7 +242,9 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 					rps = float64(s.metrics.TotalChecks.Load()) / elapsed.Seconds()
 				}
 				proxyAddr := result.Proxy
-				if len(proxyAddr) > 30 {
+				if proxyAddr == "" {
+					proxyAddr = "direct"
+				} else if len(proxyAddr) > 30 {
 					proxyAddr = proxyAddr[:30]
 				}
 				fmt.Printf("%s[Taken]%s %s RPS: %.0f/s | resp: {'taken': True} | proxy: %s\n", Red, Reset, result.Target, rps, proxyAddr)
