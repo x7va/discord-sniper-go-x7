@@ -254,6 +254,7 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 			} else if result.Status == 429 {
 				// Check for rate limits
 				s.metrics.IncrementRateLimits()
+				PrintRateLimit("Rate limited on @%s", result.Target)
 			} else if result.Status >= 200 && result.Status < 300 {
 				// Generic success response for non-Discord APIs
 				s.metrics.IncrementAvailableStatus()
@@ -270,7 +271,15 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 			}
 		} else {
 			s.metrics.IncrementErrors()
-			PrintError("Request failed: %v", result.Error)
+			// Distinguish between proxy errors, rate limits, and other errors
+			errMsg := result.Error.Error()
+			if strings.Contains(errMsg, "proxy") || strings.Contains(errMsg, "socks") || strings.Contains(errMsg, "connect") {
+				PrintError("Proxy error: %v", result.Error)
+			} else if strings.Contains(errMsg, "timeout") {
+				PrintError("Timeout: %v", result.Error)
+			} else {
+				PrintError("Request failed: %v", result.Error)
+			}
 		}
 
 		s.resultsChan <- result
