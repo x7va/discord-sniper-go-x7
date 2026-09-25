@@ -17,14 +17,17 @@ import (
 // Rotator manages round-robin distribution of proxies and tokens.
 // It provides thread-safe access to proxy and token pools for high-concurrency scenarios.
 type Rotator struct {
-	proxies     []string                // List of proxy URLs loaded from proxies.txt
-	tokens      []string                // List of authorization tokens loaded from tokens.txt
-	proxyMu     sync.Mutex              // Mutex for thread-safe proxy access
-	tokenMu     sync.Mutex              // Mutex for thread-safe token access
-	proxyIdx    int                     // Current index for round-robin proxy selection
-	tokenIdx    int                     // Current index for round-robin token selection
-	clientCache map[string]*http.Client // Cached HTTP clients per proxy URL
-	cacheMu     sync.RWMutex            // Mutex for thread-safe cache access
+	proxies          []string                // List of proxy URLs loaded from proxies.txt
+	tokens           []string                // List of authorization tokens loaded from tokens.txt
+	proxyMu          sync.Mutex              // Mutex for thread-safe proxy access
+	tokenMu          sync.Mutex              // Mutex for thread-safe token access
+	proxyIdx         int                     // Current index for round-robin proxy selection
+	tokenIdx         int                     // Current index for round-robin token selection
+	clientCache      map[string]*http.Client // Cached HTTP clients per proxy URL
+	cacheMu          sync.RWMutex            // Mutex for thread-safe cache access
+	proxyFailures    map[string]int          // Track failure count per proxy
+	proxyMuFail      sync.Mutex              // Mutex for proxy failure tracking
+	failureThreshold int                     // Max failures before disabling proxy
 }
 
 // NewRotator creates a new Rotator instance and loads proxies and tokens from files.
@@ -32,9 +35,11 @@ type Rotator struct {
 // Returns an error if both files are missing or empty.
 func NewRotator(proxyFile, tokenFile string) (*Rotator, error) {
 	r := &Rotator{
-		proxyIdx:    0,
-		tokenIdx:    0,
-		clientCache: make(map[string]*http.Client),
+		proxyIdx:         0,
+		tokenIdx:         0,
+		clientCache:      make(map[string]*http.Client),
+		proxyFailures:    make(map[string]int),
+		failureThreshold: 3, // Disable proxy after 3 failures
 	}
 
 	// Load proxies from file if path is provided
@@ -141,7 +146,7 @@ func loadTokens(filename string) ([]string, error) {
 	return tokens, nil
 }
 
-// NextProxy returns the next proxy URL in round-robin fashion.
+// NextProxy returns the next proxy URL in round-robin fashion, skipping failed proxies.
 // Thread-safe using sync.Mutex to prevent race conditions in concurrent scenarios.
 // Returns empty string if no proxies are available.
 func (r *Rotator) NextProxy() string {
@@ -152,9 +157,27 @@ func (r *Rotator) NextProxy() string {
 		return ""
 	}
 
-	proxy := r.proxies[r.proxyIdx]
-	r.proxyIdx = (r.proxyIdx + 1) % len(r.proxies)
-	return proxy
+	// Try to find a working proxy (skip failed ones)
+	attempts := 0
+	maxAttempts := len(r.proxies) * 2 // Prevent infinite loop
+
+	for attempts < maxAttempts {
+		proxy := r.proxies[r.proxyIdx]
+		r.proxyIdx = (r.proxyIdx + 1) % len(r.proxies)
+
+		// Check if proxy has failed too many times
+		r.proxyMuFail.Lock()
+		failures := r.proxyFailures[proxy]
+		r.proxyMuFail.Unlock()
+
+		if failures < r.failureThreshold {
+			return proxy
+		}
+
+		attempts++
+	}
+
+	return "" // All proxies failed
 }
 
 // GetCurrentProxy returns the current proxy URL without advancing the index.
@@ -279,4 +302,24 @@ func (r *Rotator) ProxyCount() int {
 // TokenCount returns the number of loaded tokens.
 func (r *Rotator) TokenCount() int {
 	return len(r.tokens)
+}
+
+// MarkProxyFailed marks a proxy as failed and increments its failure count.
+// If a proxy fails too many times, it will be skipped in NextProxy.
+func (r *Rotator) MarkProxyFailed(proxy string) {
+	r.proxyMuFail.Lock()
+	defer r.proxyMuFail.Unlock()
+
+	r.proxyFailures[proxy]++
+	if r.proxyFailures[proxy] >= r.failureThreshold {
+		// Remove proxy from list to prevent retries
+		r.proxyMu.Lock()
+		for i, p := range r.proxies {
+			if p == proxy {
+				r.proxies = append(r.proxies[:i], r.proxies[i+1:]...)
+				break
+			}
+		}
+		r.proxyMu.Unlock()
+	}
 }

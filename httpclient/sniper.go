@@ -275,8 +275,16 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 			errMsg := result.Error.Error()
 			if strings.Contains(errMsg, "proxy") || strings.Contains(errMsg, "socks") || strings.Contains(errMsg, "connect") {
 				PrintError("Proxy error: %v", result.Error)
+				// Mark proxy as failed
+				if s.rotator != nil && result.Proxy != "" && result.Proxy != "direct" {
+					s.rotator.MarkProxyFailed(result.Proxy)
+				}
 			} else if strings.Contains(errMsg, "timeout") {
 				PrintError("Timeout: %v", result.Error)
+				// Mark proxy as failed (timeouts indicate bad proxy)
+				if s.rotator != nil && result.Proxy != "" && result.Proxy != "direct" {
+					s.rotator.MarkProxyFailed(result.Proxy)
+				}
 			} else {
 				PrintError("Request failed: %v", result.Error)
 			}
