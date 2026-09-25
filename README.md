@@ -1,4 +1,4 @@
-# High-Performance Concurrent Username Sniper
+# discord-sniper-go-x7
 
 A lightning-fast, platform-agnostic username sniper engineered in **Go (Golang)**. Built for millisecond-precision execution, high-throughput concurrency via goroutines, and robust rate-limit defense, complete with a real-time ANSI terminal dashboard.
 
@@ -49,8 +49,8 @@ The codebase is organized into a modular structure for maximum maintainability a
 ### Setup
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd sniper
+git clone https://github.com/x7va/discord-sniper-go-x7
+cd discord-sniper-go-x7
 
 # No external dependencies required - uses only Go standard library
 # The project is ready to use immediately
