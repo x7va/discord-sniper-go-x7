@@ -92,30 +92,9 @@ func (d *Dashboard) updateLoop() {
 
 // updateStatusLine updates the persistent status line at the bottom of the terminal.
 func (d *Dashboard) updateStatusLine() {
-	// Calculate metrics
-	totalChecks := d.metrics.TotalChecks.Load()
-	available := d.metrics.AvailableStatus.Load()
-	claims := d.metrics.SuccessfulClaims.Load()
-	errors := d.metrics.Errors.Load()
-	rateLimits := d.metrics.RateLimits.Load()
-
-	// Calculate requests per second
-	elapsed := time.Since(d.metrics.StartTime).Seconds()
-	var reqPerSec float64
-	if elapsed > 0 {
-		reqPerSec = float64(totalChecks) / elapsed
-	}
-
-	// Build clean status line matching the example UI
-	statusLine := fmt.Sprintf(
-		"\r\033[K%slist | %d chk | %d avail | %d claim | %d err | %d rl | %.0f/s%s",
-		Cyan, totalChecks, available, claims, errors, rateLimits, reqPerSec, Reset,
-	)
-
-	// Move to bottom of terminal and print status line
-	d.moveToBottom()
-	fmt.Print(statusLine)
-	d.statusLine = statusLine
+	// Disable the persistent status line to prevent overlapping
+	// Individual result lines will show the information instead
+	return
 }
 
 // getTerminalHeight returns the current terminal height.
@@ -146,6 +125,8 @@ func (d *Dashboard) clearStatusLine() {
 	d.moveToBottom()
 	fmt.Print("\r\033[K")
 	fmt.Print("\033[0m") // Reset colors
+	// Move cursor up to prevent leaving it at the bottom
+	fmt.Print("\033[1A")
 }
 
 // UpdateTarget updates the current target being processed.
@@ -194,13 +175,13 @@ func PrintCritical(format string, args ...interface{}) {
 // PrintStatus prints a status message in cyan without timestamp (cleaner).
 func PrintStatus(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s%s\n", Cyan, msg)
+	fmt.Printf("%s%s\n\033[K", Cyan, msg)
 }
 
 // PrintInfo prints an informational message in white without timestamp (cleaner).
 func PrintInfo(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s\n", msg)
+	fmt.Printf("%s\n\033[K", msg)
 }
 
 // PrintProgress prints a progress indicator.

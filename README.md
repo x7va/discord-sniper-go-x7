@@ -1,340 +1,257 @@
-# discord-sniper-go-x7
+# Discord Username Sniper
 
-A lightning-fast, platform-agnostic username sniper engineered in **Go (Golang)**. Built for millisecond-precision execution, high-throughput concurrency via goroutines, and robust rate-limit defense, complete with a real-time ANSI terminal dashboard.
-
----
-
-## 🚀 Key Features
-
-* **Optimized HTTP Transport**: Utilizes custom transport connection pooling, aggressive keep-alives, and disabled idle timeout overhead to maintain pre-warmed sockets and eliminate handshake latency.
-* **Thread-Safe Rotator**: Seamlessly cycles through proxies (HTTP/HTTPS/SOCKS5) and authorization tokens using round-robin distribution with built-in health tracking and client caching.
-* **Concurrent Worker Pool**: Scales execution safely using buffered channels and goroutines for multi-threaded target evaluation.
-* **Smart Rate-Limit Defense**: Instantly intercepts status codes and `Retry-After` headers to back off throttled workers and rotate dead nodes without crashing.
-* **Live Terminal UI Dashboard**: Features a clean, non-blocking status ticker built with ANSI escape codes and carriage returns (`\r`) for real-time telemetry tracking (`checks`, `availability`, `claims`, `errors`, `rate-limits`, and `req/s`).
-* **Discord Username Validation**: Built-in validation for Discord username requirements (2-32 chars, alphanumeric + underscores, no leading/trailing underscores).
+A high-performance Discord username availability checker written in Go. Built for speed with concurrent execution, proxy rotation, and intelligent rate-limit handling.
 
 ---
 
-## 📁 Project Architecture
+## Features
 
-The codebase is organized into a modular structure for maximum maintainability and performance:
-
-```text
-├── main.go              # Entry point & orchestration loop with interactive configuration
-├── generator/
-│   └── generator.go     # Username generation utility with Discord validation
-├── cmd/
-│   └── generator/
-│       └── main.go     # Generator command-line interface
-├── httpclient/
-│   ├── transport.go    # Optimized HTTP transport & persistent connection pool
-│   ├── rotator.go      # Thread-safe proxy and token rotation manager with client caching
-│   ├── sniper.go       # Core worker pool and concurrent execution engine
-│   ├── middleware.go   # Response error handling, backoff, and rate-limit defense
-│   └── ui.go           # Real-time ANSI terminal dashboard and logging
-├── config.json          # Example configuration file
-├── proxies.txt         # Proxy list (http, https, socks5)
-├── tokens.txt          # Authorization tokens
-└── targets.txt         # Target usernames (generated or manual)
-```
+- **High-Concurrency**: Worker pool pattern with goroutines for maximum throughput
+- **Proxy Rotation**: Supports HTTP/HTTPS/SOCKS5/SOCKS4 with automatic failover
+- **Token Rotation**: Authorization token rotation for authenticated requests
+- **Rate Limit Defense**: Automatic backoff on 429 responses with `Retry-After` header parsing
+- **Smart Proxy Management**: Health tracking, cooldown tracking, and automatic proxy removal
+- **Discord Validation**: Built-in username validation (2-32 chars, alphanumeric + underscores)
+- **Clean Output**: Color-coded terminal output with real-time statistics
+- **Username Generation**: Random username generation with Discord validation
 
 ---
 
-## 🛠️ Installation
+## Installation
 
 ### Prerequisites
 - Go 1.21 or higher
-- Basic terminal with ANSI support
 
-### Setup
+### Build from Source
 ```bash
-# Clone the repository
 git clone https://github.com/x7va/discord-sniper-go-x7
 cd discord-sniper-go-x7
+go build -o sniper main.go
+```
 
-# No external dependencies required - uses only Go standard library
-# The project is ready to use immediately
+### Run Directly
+```bash
+go run main.go
 ```
 
 ---
 
-## 📖 Usage
+## Quick Start
 
-### Basic Usage
-
+### Interactive Mode
 ```bash
-# Run with interactive configuration
+./sniper
+# or
 go run main.go
-
-# The program will prompt you for:
-# - Proxy usage (y/n)
-# - Token usage (y/n)
-# - Username generation vs file loading
-# - Worker count
-# - Stop on first success option
 ```
+
+The program will prompt you for:
+- Proxy usage (y/n)
+- Token usage (y/n)
+- Username generation vs file loading
+- Worker count
+- Stop on first success
 
 ### Generate Usernames
-
 ```bash
-# Generate random usernames for Discord (4-character combinations)
 go run cmd/generator/main.go
-
-# This creates targets.txt with valid Discord usernames
-# Generated usernames follow Discord's validation rules:
-# - 2-32 characters
-# - Alphanumeric (a-z, A-Z, 0-9) and underscores only
-# - Cannot start or end with underscore
-# - No consecutive underscores
 ```
+This creates `targets.txt` with valid Discord usernames.
 
-### Configuration File
+---
 
-Create a `config.json` file for advanced configuration:
-
-```json
-{
-  "workers": 25,
-  "method": "POST",
-  "timeout": 10,
-  "proxy_file": "proxies.txt",
-  "token_file": "tokens.txt",
-  "target_file": "targets.txt",
-  "base_url": "https://discord.com/api/v9/unique-username/username-attempt-unauthed",
-  "payload": {
-    "username": "TARGET_PLACEHOLDER"
-  },
-  "headers": {},
-  "success_codes": [200],
-  "max_error_rate": 50,
-  "rate_limit_backoff": 5,
-  "auto_rotation": true,
-  "stop_on_success": false,
-  "identifier_key": ""
-}
-```
+## Configuration
 
 ### Input Files
 
-**proxies.txt** - One proxy per line (supports http, https, socks5):
+**proxies.txt** - One proxy per line:
 ```
 http://proxy1.example.com:8080
 https://proxy2.example.com:8443
 socks5://proxy3.example.com:1080
-# Comments are ignored
+socks4://proxy4.example.com:1080
 ```
 
-**tokens.txt** - One authorization token per line:
+**tokens.txt** - One token per line:
 ```
 Bearer token1_here
 Bearer token2_here
-# Comments are ignored
 ```
 
-**targets.txt** - One username per line (for Discord username checking):
+**targets.txt** - One username per line:
 ```
 username1
 username2
 username3
-# Comments are ignored
 ```
 
-### Interactive Configuration Options
-
-When running `go run main.go`, you'll be prompted for:
-
-- **Proxy Usage**: Enable/disable proxy rotation
-- **Token Usage**: Enable/disable token rotation  
-- **Username Generation**: Generate random usernames or load from file
-- **Username Count**: Number of usernames to generate (if generation enabled)
-- **Username Length**: Length of generated usernames (min 2 for Discord)
-- **Worker Count**: Number of concurrent workers (default: 10)
-- **Stop on Success**: Stop execution after first successful claim
-
----
-
-## 🎯 Configuration Options
-
-### Interactive Configuration
-The main application uses an interactive configuration menu that prompts for:
-- Proxy and token usage
-- Username generation vs file loading
-- Worker count (1-1000 recommended)
-- Request timeout
-- Stop on success behavior
-
-### Discord-Specific Settings
-- **Base URL**: `https://discord.com/api/v9/unique-username/username-attempt-unauthed` (Discord unauthenticated username check endpoint)
-- **HTTP Method**: POST (for username availability checking)
-- **Username Validation**: Built-in Discord username requirements
-- **Request Delay**: 3 seconds when no proxies used (rate limiting)
-
-### Default Configuration
-```go
-Workers:          10
-Method:           "POST"
-Timeout:          30 seconds
-BaseURL:          "https://discord.com/api/v9/unique-username/username-attempt-unauthed"
-UsernameLength:   6 characters (minimum 2 for Discord)
-RequestDelay:     3 seconds (no proxy mode)
-MaxErrorRate:     200 errors/minute
-RateLimitBackoff: 5 seconds
-AutoRotation:     true
-StopOnSuccess:    false
+### Config File (config.json)
+```json
+{
+  "workers": 20,
+  "method": "POST",
+  "timeout": 60,
+  "use_proxies": true,
+  "proxy_file": "proxies.txt",
+  "use_tokens": true,
+  "token_file": "tokens.txt",
+  "generate_usernames": false,
+  "username_count": 100,
+  "username_length": 4,
+  "target_file": "targets.txt",
+  "base_url": "https://discord.com/api/v9/unique-username/username-attempt-unauthed",
+  "request_delay": 3,
+  "success_codes": [200],
+  "max_error_rate": 200,
+  "rate_limit_backoff": 5,
+  "auto_rotation": true,
+  "stop_on_success": false
+}
 ```
 
 ---
 
-## 🎨 Terminal Dashboard
+## Output Format
 
-The real-time dashboard displays:
-- **TARGET**: Current target being processed
-- **CHECKS**: Total requests attempted
-- **AVAIL**: Available targets (200 OK)
-- **CLAIMS**: Successful claims with identifiers
-- **ERRORS**: Total errors encountered
-- **429s**: Rate limit responses
-- **PROXY**: Proxy rotation events
-- **REQ/S**: Requests per second
+The tool displays results in real-time:
 
-### Color Coding
-- 🟢 **Green**: Successes and availability
-- 🟡 **Yellow**: Rate limits and proxy switches
-- 🔴 **Red**: Critical errors
-- 🔵 **Cyan**: Status notes and information
+```
+Available] username, RPS : 18 / s, resp : {'taken': False}, proxy : proxy.example.com:8080
+Taken] username2, RPS : 18 / s, resp : {'taken': True}, proxy : proxy.example.com:8080
+[RATELIMIT] Rate limited on @username3 - back in 5s (proxy: proxy.example.com:8080)
+[ERROR] Proxy error: connection refused
+```
 
----
-
-## ⚙️ Configuration Options
-
-### Transport Configuration
-- **MaxIdleConns**: 200 (total idle connections)
-- **MaxIdleConnsPerHost**: 100 (per-host idle connections)
-- **IdleConnTimeout**: 90s (connection reuse window)
-- **TLSHandshakeTimeout**: 10s (TLS handshake limit)
-- **ResponseHeaderTimeout**: 10s (slow server detection)
-- **ForceAttemptHTTP2**: true (HTTP/2 multiplexing)
-
-### Middleware Configuration
-- **Success Codes**: Configurable (default: 200)
-- **Max Error Rate**: 200 errors/minute threshold
-- **Rate Limit Backoff**: 5 seconds default
-- **Auto Rotation**: Automatic proxy/token rotation on rate limits
-- **Stop on Success**: Halt execution on first successful claim
-
-### Performance Optimizations
-- **Client Caching**: HTTP clients are cached per proxy URL to maintain connection pooling
-- **Dynamic Terminal Height**: Dashboard automatically detects terminal size
-- **Concurrent Execution**: Thread-safe operations throughout
+**Color Coding:**
+- 🟢 Green: Available usernames
+- 🔴 Red: Taken usernames
+- 🟡 Yellow: Rate limits
+- 🔴 Red: Errors
 
 ---
 
-## 🔧 Performance Tuning
+## Architecture
 
-### High Concurrency
+```
+├── main.go              # Entry point & interactive configuration
+├── generator/
+│   └── generator.go     # Username generation
+├── cmd/
+│   └── generator/
+│       └── main.go     # Generator CLI
+├── httpclient/
+│   ├── transport.go    # Optimized HTTP transport
+│   ├── rotator.go      # Proxy/token rotation
+│   ├── sniper.go       # Core execution engine
+│   ├── middleware.go   # Response processing
+│   └── ui.go           # Terminal UI
+├── config.json          # Configuration file
+├── proxies.txt         # Proxy list
+├── tokens.txt          # Authorization tokens
+└── targets.txt         # Target usernames
+```
+
+---
+
+## Performance Tuning
+
+### High Speed
 ```bash
-# Generate many usernames and use high worker count
-go run cmd/generator/main.go
-go run main.go  # Use 100+ workers when prompted
+# Use 100+ workers with good proxy pool
+./sniper
+# Select: proxies=y, tokens=y, workers=100
 ```
 
-### Conservative Settings
+### Conservative
 ```bash
-# Use fewer workers and longer timeout
-go run main.go  # Use 5 workers, 60 second timeout when prompted
+# Use fewer workers for reliability
+./sniper
+# Select: proxies=y, tokens=y, workers=5, timeout=60
 ```
 
-### Aggressive Settings
+### Without Proxies
 ```bash
-# Maximum speed with stop on success
-go run main.go  # Use 200 workers, 10 second timeout, stop on success
+# Direct connection with rate limiting
+./sniper
+# Select: proxies=n, workers=10
 ```
 
 ---
 
-## 🛡️ Rate Limit Handling
+## Rate Limit Handling
 
-The system automatically handles rate limiting by:
-1. Detecting 429 status codes
-2. Parsing `Retry-After` headers (seconds or HTTP-date)
-3. Applying appropriate backoff delays
+The system automatically handles rate limits by:
+1. Detecting HTTP 429 responses
+2. Parsing `Retry-After` headers
+3. Applying backoff delays
 4. Rotating to fresh proxy/token pairs
-5. Tracking error frequency to prevent permanent blocks
+5. Tracking proxy cooldowns
+6. Skipping rate-limited proxies during cooldown
 
 ---
 
-## 📊 Error Tracking
+## Proxy Management
 
-Built-in error tracking includes:
-- Sliding window error rate monitoring
-- Status code distribution tracking
-- Automatic threshold enforcement
-- Detailed error statistics reporting
+### Proxy Health
+- Proxies that fail 3+ times are automatically removed
+- Rate-limited proxies are tracked in cooldown
+- Cooldowned proxies are skipped until available
+
+### Proxy Rotation
+- Round-robin distribution
+- Skips failed and cooldowned proxies
+- HTTP clients cached per proxy for connection reuse
 
 ---
 
-## 🚨 Safety Features
+## Safety Features
 
 - Thread-safe operations throughout
-- Graceful shutdown on interrupt signals
+- Graceful shutdown on Ctrl+C
 - Configurable error thresholds
 - Automatic connection cleanup
 - Secure token truncation in logs
-- Discord username validation to prevent invalid requests
+- Discord username validation
 
 ---
 
-## 🤝 Contributing
+## Troubleshooting
 
-Contributions are welcome! Please ensure:
-- Code follows Go best practices
-- All functions are documented
-- Thread-safety is maintained
-- Error handling is comprehensive
+### "go: command not found"
+Install Go from https://golang.org/dl/
+
+### Connection errors
+- Check proxy file format
+- Verify network connectivity
+- Ensure proxies are operational
+
+### Rate limiting
+- Increase timeout value
+- Add more proxies
+- Reduce worker count
+
+### High memory usage
+- Reduce worker count
+- Check for connection leaks
 
 ---
 
-## 📝 License
+## Contributing
+
+Contributions welcome! Please:
+- Follow Go best practices
+- Maintain thread-safety
+- Add tests for new features
+- Update documentation
+
+---
+
+## License
 
 This project is provided as-is for educational and research purposes.
 
 ---
 
-## ⚠️ Disclaimer
+## Disclaimer
 
-This tool is designed for legitimate testing and research purposes only. Users are responsible for ensuring compliance with applicable laws, terms of service, and ethical guidelines. The authors are not responsible for misuse of this software.
-
----
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**"go: command not found"**
-- Install Go from https://golang.org/dl/
-
-**Connection errors**
-- Check proxy file format
-- Verify network connectivity
-- Ensure proxies are operational
-
-**Rate limiting**
-- Increase timeout value
-- Add more proxies to rotation
-- Reduce worker count
-
-**High memory usage**
-- Reduce worker count
-- Check for connection leaks
-- Monitor system resources
-
-**Username generation issues**
-- Ensure username length is at least 2 for Discord
-- Check that generated usernames meet validation requirements
-- Try increasing the generation attempts limit
-
----
-
-## 📞 Support
-
-For issues, questions, or contributions, please refer to the project repository or contact the maintainers.
+This tool is designed for legitimate testing and research purposes only. Users are responsible for ensuring compliance with applicable laws, terms of service, and ethical guidelines.

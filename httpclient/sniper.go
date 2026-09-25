@@ -24,6 +24,7 @@ type Result struct {
 	Proxy      string        // Proxy used for this request (if any)
 	Token      string        // Token used for this request (truncated for logging)
 	Identifier string        // Extracted identifier from successful response (if available)
+	Delay      time.Duration // Rate limit delay if applicable
 }
 
 // SniperConfig holds configuration for the Sniper execution engine.
@@ -142,9 +143,6 @@ func (s *Sniper) SetTargets(targets []string) {
 // SetProxyUsage sets whether proxies are being used
 func (s *Sniper) SetProxyUsage(useProxies bool) {
 	s.useProxies = useProxies
-	if !useProxies {
-	} else {
-	}
 }
 
 // Results returns the read-only results channel.
@@ -164,9 +162,9 @@ func (s *Sniper) Execute() {
 
 	PrintStatus("Starting execution with %d workers for %d targets", s.workers, len(s.targets))
 
-	// Start the dashboard
-	s.dashboard.Start(100 * time.Millisecond)
-	defer s.dashboard.Stop()
+	// Disable dashboard to prevent overlapping text
+	// s.dashboard.Start(100 * time.Millisecond)
+	// defer s.dashboard.Stop()
 
 	// Create a buffered channel for targets
 	targetChan := make(chan string, s.workers)
@@ -200,9 +198,6 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 	defer s.wg.Done()
 
 	for target := range targetChan {
-		// Update dashboard with current target
-		s.dashboard.UpdateTarget(target)
-
 		// Add delay if not using proxies (rate limiting)
 		if !s.useProxies && s.config.RequestDelay > 0 {
 			time.Sleep(time.Duration(s.config.RequestDelay) * time.Second)
@@ -231,7 +226,7 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 				} else if len(proxyAddr) > 30 {
 					proxyAddr = proxyAddr[:30]
 				}
-				fmt.Printf("%s[Available]%s %s RPS: %.0f/s | resp: {'taken': False} | proxy: %s\n", Green, Reset, result.Target, rps, proxyAddr)
+				fmt.Printf("%sAvailable%s %s, RPS : %.0f / s, resp : {'taken': False}, proxy : %s\n", Green, Reset, result.Target, rps, proxyAddr)
 			} else if result.Identifier == "taken" {
 				// Format: [Taken] username RPS: X/s | resp: {'taken': True} | proxy: address
 				elapsed := time.Since(s.metrics.StartTime)
@@ -245,14 +240,28 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 				} else if len(proxyAddr) > 30 {
 					proxyAddr = proxyAddr[:30]
 				}
-				fmt.Printf("%s[Taken]%s %s RPS: %.0f/s | resp: {'taken': True} | proxy: %s\n", Red, Reset, result.Target, rps, proxyAddr)
+				fmt.Printf("%sTaken%s %s, RPS : %.0f / s, resp : {'taken': True}, proxy : %s\n", Red, Reset, result.Target, rps, proxyAddr)
 			} else if result.Identifier == "error" {
 				// Discord returned an error response
 				s.metrics.IncrementErrors()
+				PrintError("Discord API error on @%s", result.Target)
 			} else if result.Status == 429 {
 				// Check for rate limits
 				s.metrics.IncrementRateLimits()
-				PrintRateLimit("Rate limited on @%s", result.Target)
+
+				// Print initial rate limit message
+				proxyAddr := result.Proxy
+				if len(proxyAddr) > 30 {
+					proxyAddr = proxyAddr[:30]
+				}
+				delaySeconds := int(result.Delay.Seconds())
+				if delaySeconds < 1 {
+					delaySeconds = 5 // Ensure minimum delay
+				}
+				PrintRateLimit("Rate limited on @%s - back in %ds (proxy: %s)", result.Target, delaySeconds, proxyAddr)
+
+				// Track rate limit with timer manager using unique ID
+				s.rotator.TrackRateLimit(result.Target, result.Proxy, result.Delay, 0)
 			} else if result.Status >= 200 && result.Status < 300 {
 				// Generic success response for non-Discord APIs
 				s.metrics.IncrementAvailableStatus()
@@ -380,7 +389,7 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 	if err != nil {
 		// Process error through middleware
 		if s.middleware != nil {
-			_, shouldStop, _, _ := s.middleware.ProcessResponse(nil, nil, err)
+			_, shouldStop, _, _ := s.middleware.ProcessResponse(nil, nil, err, proxy)
 			if shouldStop {
 			}
 		}
@@ -405,7 +414,7 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 	var delay time.Duration
 
 	if s.middleware != nil {
-		identifier, _, shouldRotate, delay = s.middleware.ProcessResponse(resp, responseBody, nil)
+		identifier, _, shouldRotate, delay = s.middleware.ProcessResponse(resp, responseBody, nil, proxy)
 	}
 
 	// Create result immediately with identifier to prevent loss during delays
@@ -417,11 +426,7 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 		Proxy:      proxy,
 		Token:      TruncateToken(token, 10),
 		Identifier: identifier,
-	}
-
-	// Apply rate limiting delay if needed (after result is created)
-	if delay > 0 {
-		s.middleware.ApplyDelay(delay)
+		Delay:      delay,
 	}
 
 	// Rotate credentials if requested (after result is created)

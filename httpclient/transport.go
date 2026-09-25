@@ -3,6 +3,7 @@ package httpclient
 import (
 	"net"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -11,20 +12,21 @@ import (
 // for applications making many concurrent HTTP requests.
 var (
 	// sharedClient is the singleton HTTP client instance.
-	sharedClient *http.Client
+	sharedClient     *http.Client
+	sharedClientOnce sync.Once
 )
 
 // GetClient returns the shared HTTP client instance with optimized transport settings.
 // This client should be reused across your application rather than creating new clients,
 // as it maintains a connection pool that benefits from long-lived connections.
 func GetClient() *http.Client {
-	if sharedClient == nil {
+	sharedClientOnce.Do(func() {
 		sharedClient = &http.Client{
 			Transport: createOptimizedTransport(),
 			// Timeout should be set per-request for better control over different operations
 			Timeout: 0,
 		}
-	}
+	})
 	return sharedClient
 }
 

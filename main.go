@@ -91,6 +91,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize timer manager
+	rotator.StartTimerManager()
+
 	if config.UseProxies {
 		httpclient.PrintInfo("Proxies: %d", rotator.ProxyCount())
 	}
@@ -170,11 +173,13 @@ func main() {
 	// Wait for completion or interrupt
 	select {
 	case <-done:
-		httpclient.PrintSuccess("Username claimed! (%d checks)", resultCount)
+		httpclient.PrintSuccess("Execution completed! (%d checks)", resultCount)
+		rotator.StopTimerManager()
 	case <-sigChan:
 		httpclient.PrintStatus("Received interrupt signal, shutting down gracefully...")
 		httpclient.PrintInfo("Processed %d results before shutdown", resultCount)
 		time.Sleep(500 * time.Millisecond) // Allow dashboard to final update
+		rotator.StopTimerManager()
 	}
 
 	// Print final summary statistics

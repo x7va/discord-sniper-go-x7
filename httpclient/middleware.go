@@ -25,7 +25,7 @@ type MiddlewareConfig struct {
 // ResponseHandler defines the interface for handling HTTP responses.
 type ResponseHandler interface {
 	HandleSuccess(resp *http.Response, body []byte) (identifier string, shouldStop bool)
-	HandleRateLimit(resp *http.Response) (delay time.Duration, shouldRotate bool)
+	HandleRateLimit(resp *http.Response, proxy string) (delay time.Duration, shouldRotate bool)
 	HandleError(statusCode int, err error) (shouldContinue bool)
 }
 
@@ -179,7 +179,7 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 
 // HandleRateLimit processes rate limit responses (429) and Retry-After headers.
 // It parses the delay value and determines if proxy/token rotation should occur.
-func (m *Middleware) HandleRateLimit(resp *http.Response) (delay time.Duration, shouldRotate bool) {
+func (m *Middleware) HandleRateLimit(resp *http.Response, proxy string) (delay time.Duration, shouldRotate bool) {
 	if resp.StatusCode != http.StatusTooManyRequests {
 		return 0, false
 	}
@@ -206,13 +206,21 @@ func (m *Middleware) HandleRateLimit(resp *http.Response) (delay time.Duration, 
 		delay = m.config.RateLimitBackoff
 	}
 
+	// Ensure minimum delay of 1 second for timer display
+	if delay < 1*time.Second {
+		delay = 5 * time.Second // Use default if delay is too short
+	}
+
+	// Mark proxy as rate-limited with cooldown
+	if m.rotator != nil && proxy != "" && proxy != "direct" {
+		m.rotator.MarkProxyRateLimited(proxy, delay)
+	}
+
 	// Record the rate limit error
 	m.errorTracker.RecordError(http.StatusTooManyRequests)
 
 	// Determine if rotation should occur
 	shouldRotate = m.config.EnableAutoRotation
-	if shouldRotate {
-	}
 
 	return delay, shouldRotate
 }
@@ -226,11 +234,6 @@ func (m *Middleware) HandleError(statusCode int, err error) (shouldContinue bool
 	// Check if error rate exceeds threshold (but don't stop execution, just warn)
 	if m.config.MaxErrorRate > 0 && m.errorTracker.IsRateLimitExceeded(m.config.MaxErrorRate) {
 		// Don't stop execution - continue despite high error rate
-	}
-
-	// Log the error
-	if err != nil {
-	} else {
 	}
 
 	// Always continue execution - let user decide when to stop
@@ -258,14 +261,6 @@ func (m *Middleware) extractIdentifier(body []byte, key string) string {
 	return fmt.Sprintf("response_%d", len(body))
 }
 
-// ApplyDelay pauses the current goroutine for the specified duration.
-// This is called when rate limiting is detected to respect server limits.
-func (m *Middleware) ApplyDelay(delay time.Duration) {
-	if delay > 0 {
-		time.Sleep(delay)
-	}
-}
-
 // RotateCredentials forces a rotation of proxy and token.
 // This is called when rate limiting is detected to use fresh credentials.
 func (m *Middleware) RotateCredentials() {
@@ -281,7 +276,7 @@ func (m *Middleware) RotateCredentials() {
 
 // ProcessResponse is the main entry point for middleware response processing.
 // It handles success, rate limits, and errors in a single call.
-func (m *Middleware) ProcessResponse(resp *http.Response, body []byte, err error) (identifier string, shouldStop bool, shouldRotate bool, delay time.Duration) {
+func (m *Middleware) ProcessResponse(resp *http.Response, body []byte, err error, proxy string) (identifier string, shouldStop bool, shouldRotate bool, delay time.Duration) {
 	if err != nil {
 		// Handle request error
 		shouldContinue := m.HandleError(0, err)
@@ -292,7 +287,7 @@ func (m *Middleware) ProcessResponse(resp *http.Response, body []byte, err error
 
 	// Check for rate limit FIRST (like Python code)
 	if statusCode == http.StatusTooManyRequests {
-		delay, shouldRotate := m.HandleRateLimit(resp)
+		delay, shouldRotate := m.HandleRateLimit(resp, proxy)
 		return "", false, shouldRotate, delay
 	}
 

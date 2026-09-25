@@ -3,6 +3,7 @@ package httpclient
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -14,20 +15,34 @@ import (
 	"golang.org/x/net/proxy"
 )
 
+// RateLimitInfo holds information about an active rate limit for timer display.
+type RateLimitInfo struct {
+	ID      string
+	Target  string
+	Proxy   string
+	EndTime time.Time
+}
+
 // Rotator manages round-robin distribution of proxies and tokens.
 // It provides thread-safe access to proxy and token pools for high-concurrency scenarios.
 type Rotator struct {
-	proxies          []string                // List of proxy URLs loaded from proxies.txt
-	tokens           []string                // List of authorization tokens loaded from tokens.txt
-	proxyMu          sync.Mutex              // Mutex for thread-safe proxy access
-	tokenMu          sync.Mutex              // Mutex for thread-safe token access
-	proxyIdx         int                     // Current index for round-robin proxy selection
-	tokenIdx         int                     // Current index for round-robin token selection
-	clientCache      map[string]*http.Client // Cached HTTP clients per proxy URL
-	cacheMu          sync.RWMutex            // Mutex for thread-safe cache access
-	proxyFailures    map[string]int          // Track failure count per proxy
-	proxyMuFail      sync.Mutex              // Mutex for proxy failure tracking
-	failureThreshold int                     // Max failures before disabling proxy
+	proxies          []string                 // List of proxy URLs loaded from proxies.txt
+	tokens           []string                 // List of authorization tokens loaded from tokens.txt
+	proxyMu          sync.Mutex               // Mutex for thread-safe proxy access
+	tokenMu          sync.Mutex               // Mutex for thread-safe token access
+	proxyIdx         int                      // Current index for round-robin proxy selection
+	tokenIdx         int                      // Current index for round-robin token selection
+	clientCache      map[string]*http.Client  // Cached HTTP clients per proxy URL
+	cacheMu          sync.RWMutex             // Mutex for thread-safe cache access
+	proxyFailures    map[string]int           // Track failure count per proxy
+	proxyMuFail      sync.Mutex               // Mutex for proxy failure tracking
+	failureThreshold int                      // Max failures before disabling proxy
+	proxyCooldowns   map[string]time.Time     // Track cooldown end times for rate-limited proxies
+	cooldownMu       sync.Mutex               // Mutex for cooldown tracking
+	activeRateLimits map[string]RateLimitInfo // Track active rate limits for timer display
+	rateLimitMu      sync.Mutex               // Mutex for rate limit tracking
+	timerRunning     bool                     // Track if timer manager is running
+	timerStopChan    chan struct{}            // Channel to stop timer manager
 }
 
 // NewRotator creates a new Rotator instance and loads proxies and tokens from files.
@@ -40,14 +55,16 @@ func NewRotator(proxyFile, tokenFile string) (*Rotator, error) {
 		clientCache:      make(map[string]*http.Client),
 		proxyFailures:    make(map[string]int),
 		failureThreshold: 3, // Disable proxy after 3 failures
+		proxyCooldowns:   make(map[string]time.Time),
+		activeRateLimits: make(map[string]RateLimitInfo),
+		timerRunning:     false,
+		timerStopChan:    make(chan struct{}),
 	}
 
 	// Load proxies from file if path is provided
 	if proxyFile != "" {
 		proxies, err := loadProxies(proxyFile)
-		if err != nil {
-		} else if len(proxies) == 0 {
-		} else {
+		if err == nil && len(proxies) > 0 {
 			r.proxies = proxies
 		}
 	}
@@ -55,9 +72,7 @@ func NewRotator(proxyFile, tokenFile string) (*Rotator, error) {
 	// Load tokens from file if path is provided
 	if tokenFile != "" {
 		tokens, err := loadTokens(tokenFile)
-		if err != nil {
-		} else if len(tokens) == 0 {
-		} else {
+		if err == nil && len(tokens) > 0 {
 			r.tokens = tokens
 		}
 	}
@@ -157,7 +172,7 @@ func (r *Rotator) NextProxy() string {
 		return ""
 	}
 
-	// Try to find a working proxy (skip failed ones)
+	// Try to find a working proxy (skip failed ones and cooldowns)
 	attempts := 0
 	maxAttempts := len(r.proxies) * 2 // Prevent infinite loop
 
@@ -169,6 +184,16 @@ func (r *Rotator) NextProxy() string {
 		r.proxyMuFail.Lock()
 		failures := r.proxyFailures[proxy]
 		r.proxyMuFail.Unlock()
+
+		// Check if proxy is in cooldown (avoid nested locks)
+		r.cooldownMu.Lock()
+		inCooldown := r.isProxyInCooldownNoLock(proxy)
+		r.cooldownMu.Unlock()
+
+		if inCooldown {
+			attempts++
+			continue
+		}
 
 		if failures < r.failureThreshold {
 			return proxy
@@ -322,4 +347,193 @@ func (r *Rotator) MarkProxyFailed(proxy string) {
 		}
 		r.proxyMu.Unlock()
 	}
+}
+
+// MarkProxyRateLimited marks a proxy as rate-limited with a cooldown duration.
+func (r *Rotator) MarkProxyRateLimited(proxy string, delay time.Duration) {
+	r.cooldownMu.Lock()
+	defer r.cooldownMu.Unlock()
+
+	r.proxyCooldowns[proxy] = time.Now().Add(delay)
+}
+
+// GetProxyCooldownTime returns the cooldown end time for a proxy.
+func (r *Rotator) GetProxyCooldownTime(proxy string) time.Time {
+	r.cooldownMu.Lock()
+	defer r.cooldownMu.Unlock()
+
+	return r.proxyCooldowns[proxy]
+}
+
+// isProxyInCooldownNoLock checks if a proxy is currently in cooldown (must hold cooldownMu).
+func (r *Rotator) isProxyInCooldownNoLock(proxy string) bool {
+	if r.proxyCooldowns == nil {
+		return false
+	}
+
+	endTime, exists := r.proxyCooldowns[proxy]
+	if !exists {
+		return false
+	}
+
+	// Clean up expired cooldowns
+	if time.Now().After(endTime) {
+		delete(r.proxyCooldowns, proxy)
+		return false
+	}
+
+	return true
+}
+
+// IsProxyInCooldown checks if a proxy is currently in cooldown.
+func (r *Rotator) IsProxyInCooldown(proxy string) bool {
+	r.cooldownMu.Lock()
+	defer r.cooldownMu.Unlock()
+	return r.isProxyInCooldownNoLock(proxy)
+}
+
+// CleanExpiredCooldowns removes expired cooldown entries.
+func (r *Rotator) CleanExpiredCooldowns() {
+	r.cooldownMu.Lock()
+	defer r.cooldownMu.Unlock()
+
+	if r.proxyCooldowns == nil {
+		return
+	}
+
+	now := time.Now()
+	for proxy, endTime := range r.proxyCooldowns {
+		if now.After(endTime) {
+			delete(r.proxyCooldowns, proxy)
+		}
+	}
+}
+
+// TrackRateLimit registers an active rate limit for timer display.
+func (r *Rotator) TrackRateLimit(target string, proxy string, duration time.Duration, linePos int) string {
+	r.rateLimitMu.Lock()
+	defer r.rateLimitMu.Unlock()
+
+	// Generate unique ID to avoid conflicts with same target
+	id := fmt.Sprintf("%s-%d", target, time.Now().UnixNano())
+
+	r.activeRateLimits[id] = RateLimitInfo{
+		ID:      id,
+		Target:  target,
+		Proxy:   proxy,
+		EndTime: time.Now().Add(duration),
+	}
+
+	return id
+}
+
+// GetRateLimitRemaining returns the remaining time for a rate limit.
+func (r *Rotator) GetRateLimitRemaining(id string) time.Duration {
+	r.rateLimitMu.Lock()
+	defer r.rateLimitMu.Unlock()
+
+	if r.activeRateLimits == nil {
+		return 0
+	}
+
+	info, exists := r.activeRateLimits[id]
+	if !exists {
+		return 0
+	}
+
+	remaining := time.Until(info.EndTime)
+	if remaining <= 0 {
+		delete(r.activeRateLimits, id)
+		return 0
+	}
+
+	return remaining
+}
+
+// RemoveRateLimit removes a completed rate limit.
+func (r *Rotator) RemoveRateLimit(id string) {
+	r.rateLimitMu.Lock()
+	defer r.rateLimitMu.Unlock()
+
+	if r.activeRateLimits == nil {
+		return
+	}
+
+	delete(r.activeRateLimits, id)
+}
+
+// StopTimerManager stops the background timer manager (idempotent).
+func (r *Rotator) StopTimerManager() {
+	r.rateLimitMu.Lock()
+	defer r.rateLimitMu.Unlock()
+
+	if r.timerRunning {
+		r.timerRunning = false
+		select {
+		case <-r.timerStopChan:
+			// Already closed
+		default:
+			close(r.timerStopChan)
+		}
+	}
+}
+
+// StartTimerManager starts the background timer manager for rate limit updates.
+func (r *Rotator) StartTimerManager() {
+	r.rateLimitMu.Lock()
+	if r.timerRunning {
+		r.rateLimitMu.Unlock()
+		return
+	}
+	r.timerRunning = true
+	r.rateLimitMu.Unlock()
+
+	// Initialize maps if nil
+	if r.activeRateLimits == nil {
+		r.rateLimitMu.Lock()
+		if r.activeRateLimits == nil {
+			r.activeRateLimits = make(map[string]RateLimitInfo)
+		}
+		r.rateLimitMu.Unlock()
+	}
+
+	go func() {
+		ticker := time.NewTicker(1 * time.Second) // Update every 1 second
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				r.rateLimitMu.Lock()
+
+				if r.activeRateLimits == nil {
+					r.rateLimitMu.Unlock()
+					continue
+				}
+
+				// Make a copy of the map to avoid long lock holding
+				rateLimitsCopy := make(map[string]RateLimitInfo)
+				for id, info := range r.activeRateLimits {
+					rateLimitsCopy[id] = info
+				}
+				r.rateLimitMu.Unlock()
+
+				for id, info := range rateLimitsCopy {
+					remaining := time.Until(info.EndTime)
+					if remaining <= 0 {
+						r.rateLimitMu.Lock()
+						delete(r.activeRateLimits, id)
+						r.rateLimitMu.Unlock()
+						// Print completion message and newline
+						fmt.Printf("%s[RATELIMIT] @%s cooldown complete%s\n", Yellow, info.Target, Reset)
+					} else {
+						// Don't print updates - just track the cooldown
+						// The initial message already shows the time
+					}
+				}
+			case <-r.timerStopChan:
+				return
+			}
+		}
+	}()
 }
