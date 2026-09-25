@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -204,6 +209,20 @@ func interactiveConfig() Config {
 	fmt.Println("\n=== Interactive Configuration ===")
 	fmt.Println("Tip: Type 'x' for quick setup (proxies=y, tokens=y, generate=y, count=100, length=4)")
 
+	// Mode selection
+	fmt.Println("\nSelect mode:")
+	fmt.Println("1. Username Checker (check Discord usernames)")
+	fmt.Println("2. Proxy Checker (test proxy connectivity)")
+	fmt.Print("Mode (1/2): ")
+	var mode string
+	fmt.Scanln(&mode)
+
+	// Proxy check mode
+	if mode == "2" {
+		runProxyCheck()
+		os.Exit(0)
+	}
+
 	// Proxy selection
 	fmt.Print("Use proxies? (y/n/x): ")
 	var useProxies string
@@ -309,6 +328,98 @@ func generateRandomUsernames(count, length int) []string {
 	}
 
 	return usernames
+}
+
+func runProxyCheck() {
+	fmt.Println("\n=== Proxy Checker Mode ===")
+	fmt.Print("Enter proxy file path (default: proxies.txt): ")
+	var proxyFile string
+	fmt.Scanln(&proxyFile)
+	if proxyFile == "" {
+		proxyFile = "proxies.txt"
+	}
+
+	// Load proxies
+	file, err := os.Open(proxyFile)
+	if err != nil {
+		fmt.Printf("Error opening proxy file: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	var proxies []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" && !strings.HasPrefix(line, "#") {
+			proxies = append(proxies, line)
+		}
+	}
+
+	if len(proxies) == 0 {
+		fmt.Println("No proxies found in file")
+		return
+	}
+
+	fmt.Printf("Loaded %d proxies. Starting check...\n\n", len(proxies))
+
+	// Test proxies concurrently
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	working := 0
+	failed := 0
+	workers := 10
+
+	semaphore := make(chan struct{}, workers)
+
+	for _, proxyStr := range proxies {
+		wg.Add(1)
+		go func(p string) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			// Parse proxy URL
+			proxyURL, err := url.Parse(p)
+			if err != nil {
+				mu.Lock()
+				failed++
+				fmt.Printf("%s[FAIL]%s %s - Invalid URL\n", httpclient.Red, httpclient.Reset, p)
+				mu.Unlock()
+				return
+			}
+
+			// Create HTTP client with proxy
+			client := &http.Client{
+				Transport: &http.Transport{
+					Proxy: http.ProxyURL(proxyURL),
+				},
+				Timeout: 10 * time.Second,
+			}
+
+			// Test proxy by making a request to Discord
+			resp, err := client.Get("https://discord.com")
+			if err != nil {
+				mu.Lock()
+				failed++
+				fmt.Printf("%s[FAIL]%s %s - %v\n", httpclient.Red, httpclient.Reset, p, err)
+				mu.Unlock()
+				return
+			}
+			resp.Body.Close()
+
+			mu.Lock()
+			working++
+			fmt.Printf("%s[WORKING]%s %s - Status: %d\n", httpclient.Green, httpclient.Reset, p, resp.StatusCode)
+			mu.Unlock()
+		}(proxyStr)
+	}
+
+	wg.Wait()
+
+	fmt.Printf("\n=== Results ===\n")
+	fmt.Printf("Total: %d | Working: %d | Failed: %d | Success Rate: %.1f%%\n",
+		len(proxies), working, failed, float64(working)/float64(len(proxies))*100)
 }
 
 // isValidDiscordUsername validates a username against Discord's requirements:
