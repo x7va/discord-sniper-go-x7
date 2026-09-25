@@ -216,6 +216,8 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 
 		result := s.executeRequest(target, workerID)
 
+		log.Printf("DEBUG: [WORKER %d] Result for username %s: Identifier=%s, Status=%d, Error=%v", workerID, target, result.Identifier, result.Status, result.Error)
+
 		// Update metrics based on result
 		s.metrics.IncrementTotalChecks()
 
@@ -312,7 +314,7 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 				Error:   fmt.Errorf("failed to marshal JSON payload: %w", err),
 			}
 		}
-		log.Printf("DEBUG: Sending request for username %s with payload: %s", target, string(jsonData))
+		log.Printf("DEBUG: [WORKER %d] Sending request for username %s with payload: %s", workerID, target, string(jsonData))
 		body = bytes.NewReader(jsonData)
 	}
 
