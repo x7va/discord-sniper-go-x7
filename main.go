@@ -197,9 +197,9 @@ func main() {
 func interactiveConfig() Config {
 	config := Config{
 		Workers:          10,
-		Method:           "PATCH",
+		Method:           "POST",
 		Timeout:          30, // Increased timeout for slow proxies
-		BaseURL:          "https://discord.com/api/v9/users/@me",
+		BaseURL:          "https://discord.com/api/v9/users/@me/pomelo-attempt",
 		ProxyFile:        "proxies.txt",
 		TokenFile:        "tokens.txt",
 		TargetFile:       "targets.txt",
@@ -210,13 +210,14 @@ func interactiveConfig() Config {
 		MaxErrorRate:     200, // Increased threshold to be more lenient
 		RateLimitBackoff: 5,
 		AutoRotation:     true,
-		StopOnSuccess:    true,
-		IdentifierKey:    "username",
+		StopOnSuccess:    false, // Don't stop on first success for username checking
+		IdentifierKey:    "",
 		Payload: map[string]interface{}{
 			"username": "TARGET_PLACEHOLDER",
 		},
 		Headers: map[string]string{
-			"Content-Type": "application/json",
+			"Content-Type": "Application/json",
+			"Origin":       "https://discord.com/",
 			"User-Agent":   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 		},
 	}

@@ -95,25 +95,26 @@ Create a `config.json` file for advanced configuration:
 ```json
 {
   "workers": 25,
-  "method": "PATCH",
+  "method": "POST",
   "timeout": 10,
   "proxy_file": "proxies.txt",
   "token_file": "tokens.txt",
   "target_file": "targets.txt",
-  "base_url": "https://discord.com/api/v9/users/@me",
+  "base_url": "https://discord.com/api/v9/users/@me/pomelo-attempt",
   "payload": {
     "username": "TARGET_PLACEHOLDER"
   },
   "headers": {
-    "Content-Type": "application/json",
+    "Content-Type": "Application/json",
+    "Origin": "https://discord.com/",
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
   },
   "success_codes": [200],
   "max_error_rate": 50,
   "rate_limit_backoff": 5,
   "auto_rotation": true,
-  "stop_on_success": true,
-  "identifier_key": "username"
+  "stop_on_success": false,
+  "identifier_key": ""
 }
 ```
 
@@ -167,23 +168,23 @@ The main application uses an interactive configuration menu that prompts for:
 - Stop on success behavior
 
 ### Discord-Specific Settings
-- **Base URL**: `https://discord.com/api/v9/users/@me` (configurable)
-- **HTTP Method**: PATCH (for username changes)
+- **Base URL**: `https://discord.com/api/v9/users/@me/pomelo-attempt` (Discord username check endpoint)
+- **HTTP Method**: POST (for username availability checking)
 - **Username Validation**: Built-in Discord username requirements
 - **Request Delay**: 3 seconds when no proxies used (rate limiting)
 
 ### Default Configuration
 ```go
 Workers:          10
-Method:           "PATCH"
+Method:           "POST"
 Timeout:          30 seconds
-BaseURL:          "https://discord.com/api/v9/users/@me"
+BaseURL:          "https://discord.com/api/v9/users/@me/pomelo-attempt"
 UsernameLength:   6 characters (minimum 2 for Discord)
 RequestDelay:     3 seconds (no proxy mode)
 MaxErrorRate:     200 errors/minute
 RateLimitBackoff: 5 seconds
 AutoRotation:     true
-StopOnSuccess:    true
+StopOnSuccess:    false
 ```
 
 ---

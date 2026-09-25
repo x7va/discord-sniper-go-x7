@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,7 +14,7 @@ import (
 
 // MiddlewareConfig holds configuration for response handling and rate limiting.
 type MiddlewareConfig struct {
-	SuccessStatusCodes    []int         // HTTP status codes considered successful (default: 200)
+	SuccessStatusCodes   []int         // HTTP status codes considered successful (default: 200)
 	MaxErrorRate         int           // Maximum errors per minute before throttling
 	RateLimitBackoff     time.Duration // Default backoff when no Retry-After is provided
 	EnableAutoRotation   bool          // Automatically rotate proxy/token on rate limits
@@ -30,7 +31,7 @@ type ResponseHandler interface {
 
 // ErrorTracker tracks error frequency to prevent permanent blocks.
 type ErrorTracker struct {
-	errorCount    uint64        // Total error count
+	errorCount    uint64         // Total error count
 	errorCounts   map[int]uint64 // Error counts by status code
 	lastResetTime time.Time
 	mu            sync.RWMutex
@@ -133,7 +134,28 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 	// Check if this is a success status code
 	for _, code := range m.config.SuccessStatusCodes {
 		if statusCode == code {
-			// Extract identifier if key is configured
+			// For Discord username checking, parse the JSON response to check "taken" field
+			if len(body) > 0 {
+				var discordResponse map[string]interface{}
+				if err := json.Unmarshal(body, &discordResponse); err == nil {
+					// Check if "taken" field exists and is false (username available)
+					if taken, exists := discordResponse["taken"]; exists {
+						if takenBool, ok := taken.(bool); ok {
+							if !takenBool {
+								// Username is available (taken = false)
+								log.Printf("SUCCESS: Username is available (taken=false)")
+								return "available", m.config.StopOnSuccess
+							} else {
+								// Username is taken (taken = true)
+								log.Printf("INFO: Username is taken (taken=true)")
+								return "taken", false
+							}
+						}
+					}
+				}
+			}
+
+			// Fallback to original behavior for non-Discord responses
 			if m.config.SuccessIdentifierKey != "" && len(body) > 0 {
 				identifier = m.extractIdentifier(body, m.config.SuccessIdentifierKey)
 			} else {
@@ -221,7 +243,7 @@ func (m *Middleware) HandleError(statusCode int, err error) (shouldContinue bool
 // This is a simple implementation; for complex JSON, consider using a JSON parser.
 func (m *Middleware) extractIdentifier(body []byte, key string) string {
 	bodyStr := string(body)
-	
+
 	// This is a basic implementation - for production use, use encoding/json
 	// Find the pattern in the body
 	if idx := strings.Index(bodyStr, `"`+key+`"`); idx != -1 {
@@ -234,7 +256,7 @@ func (m *Middleware) extractIdentifier(body []byte, key string) string {
 			}
 		}
 	}
-	
+
 	return fmt.Sprintf("response_%d", len(body))
 }
 
@@ -259,7 +281,7 @@ func (m *Middleware) RotateCredentials() {
 		token := m.rotator.NextToken()
 		log.Printf("Credentials rotated - Proxy count: %d, Token count: %d",
 			m.rotator.ProxyCount(), m.rotator.TokenCount())
-		
+
 		// Print proxy switch notification
 		if proxy != "" {
 			truncatedProxy := proxy
@@ -313,10 +335,10 @@ func (m *Middleware) ProcessResponse(resp *http.Response, body []byte, err error
 // GetErrorStats returns current error tracking statistics.
 func (m *Middleware) GetErrorStats() map[string]interface{} {
 	return map[string]interface{}{
-		"total_errors":      atomic.LoadUint64(&m.errorTracker.errorCount),
+		"total_errors":       atomic.LoadUint64(&m.errorTracker.errorCount),
 		"error_rate_per_min": m.errorTracker.GetErrorRate(),
-		"error_counts":      m.errorTracker.GetErrorCounts(),
-		"window_size":       m.errorTracker.windowSize,
+		"error_counts":       m.errorTracker.GetErrorCounts(),
+		"window_size":        m.errorTracker.windowSize,
 	}
 }
 

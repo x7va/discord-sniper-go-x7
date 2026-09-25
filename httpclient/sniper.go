@@ -221,14 +221,25 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 
 		if result.Error == nil {
 			if result.Status >= 200 && result.Status < 300 {
-				s.metrics.IncrementAvailableStatus()
-				if result.Identifier != "" {
+				// Check the identifier to determine if username is available or taken
+				if result.Identifier == "available" {
+					s.metrics.IncrementAvailableStatus()
 					s.metrics.IncrementSuccessfulClaims()
 					// Detailed success message like the example
 					PrintSuccess("CLAIMED @%s in %.4fms via %s", result.Target, float64(result.Latency.Microseconds())/1000, TruncateToken(result.Token, 8))
-					fmt.Printf("%s[!] @%s claimed!%s\n", Yellow, result.Target, Reset)
+					fmt.Printf("%s[!] @%s is available!%s\n", Green, result.Target, Reset)
+				} else if result.Identifier == "taken" {
+					// Username is taken, just log it
+					PrintInfo("@%s is taken (%.4fms)", result.Target, float64(result.Latency.Microseconds())/1000)
 				} else {
-					PrintAvailability("@%s is FREE! Dispatching claim (%.4fms)", result.Target, float64(result.Latency.Microseconds())/1000)
+					// Generic success response
+					s.metrics.IncrementAvailableStatus()
+					if result.Identifier != "" {
+						s.metrics.IncrementSuccessfulClaims()
+						PrintSuccess("CLAIMED @%s in %.4fms via %s", result.Target, float64(result.Latency.Microseconds())/1000, TruncateToken(result.Token, 8))
+					} else {
+						PrintAvailability("@%s is FREE! Dispatching claim (%.4fms)", result.Target, float64(result.Latency.Microseconds())/1000)
+					}
 				}
 			} else if result.Status == 429 {
 				s.metrics.IncrementRateLimits()
