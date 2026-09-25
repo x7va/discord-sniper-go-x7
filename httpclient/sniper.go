@@ -225,12 +225,10 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 			if result.Identifier == "available" {
 				s.metrics.IncrementAvailableStatus()
 				s.metrics.IncrementSuccessfulClaims()
-				// Detailed success message like the example
-				PrintSuccess("CLAIMED @%s in %.4fms via %s", result.Target, float64(result.Latency.Microseconds())/1000, TruncateToken(result.Token, 8))
-				fmt.Printf("%s[!] @%s is available!%s\n", Green, result.Target, Reset)
+				// Clean success message like the example
+				PrintSuccess("@%s claimed by @%s", result.Target, TruncateToken(result.Token, 10))
 			} else if result.Identifier == "taken" {
-				// Username is taken, just log it
-				PrintInfo("@%s is taken (%.4fms)", result.Target, float64(result.Latency.Microseconds())/1000)
+				// Username is taken, don't log (keep output clean)
 			} else if result.Identifier == "error" {
 				// Discord returned an error response
 				s.metrics.IncrementErrors()
@@ -244,9 +242,9 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 				s.metrics.IncrementAvailableStatus()
 				if result.Identifier != "" {
 					s.metrics.IncrementSuccessfulClaims()
-					PrintSuccess("CLAIMED @%s in %.4fms via %s", result.Target, float64(result.Latency.Microseconds())/1000, TruncateToken(result.Token, 8))
+					PrintSuccess("@%s claimed by @%s", result.Target, TruncateToken(result.Token, 10))
 				} else {
-					PrintAvailability("@%s is FREE! Dispatching claim (%.4fms)", result.Target, float64(result.Latency.Microseconds())/1000)
+					PrintAvailability("@%s is FREE! Dispatching claim", result.Target)
 				}
 			} else {
 				// Other HTTP errors

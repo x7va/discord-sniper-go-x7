@@ -94,6 +94,7 @@ func (d *Dashboard) updateLoop() {
 func (d *Dashboard) updateStatusLine() {
 	// Calculate metrics
 	totalChecks := d.metrics.TotalChecks.Load()
+	available := d.metrics.AvailableStatus.Load()
 	claims := d.metrics.SuccessfulClaims.Load()
 	errors := d.metrics.Errors.Load()
 	rateLimits := d.metrics.RateLimits.Load()
@@ -105,23 +106,10 @@ func (d *Dashboard) updateStatusLine() {
 		reqPerSec = float64(totalChecks) / elapsed
 	}
 
-	// Get current target
-	currentTarget := "Idle"
-	if ct := d.metrics.CurrentTarget.Load(); ct != nil {
-		if target, ok := ct.(string); ok && target != "" {
-			// Truncate target if too long
-			if len(target) > 20 {
-				currentTarget = target[:17] + "..."
-			} else {
-				currentTarget = target
-			}
-		}
-	}
-
-	// Build detailed status line matching the example UI
+	// Build clean status line matching the example UI
 	statusLine := fmt.Sprintf(
-		"\r\033[K%s[LIVE] %d (%.1f/s) | Taken: %d | 429: %d | Errors: %d | %s (0ms)%s",
-		Cyan, totalChecks, reqPerSec, claims, rateLimits, errors, "@"+currentTarget, Reset,
+		"\r\033[K%slist | %d chk | %d avail | %d claim | %d err | %d rl | %.0f/s%s",
+		Cyan, totalChecks, available, claims, errors, rateLimits, reqPerSec, Reset,
 	)
 
 	// Move to bottom of terminal and print status line
@@ -167,60 +155,52 @@ func (d *Dashboard) UpdateTarget(target string) {
 
 // Color-coded print functions for different log levels
 
-// PrintSuccess prints a success message in green with timestamp.
+// PrintSuccess prints a success message in green without timestamp (cleaner).
 func PrintSuccess(format string, args ...interface{}) {
-	timestamp := time.Now().Format("15:04:05.000")
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s%s [SUCCESS] %s%s\n", White, timestamp, Green+msg, Reset)
+	fmt.Printf("%s[SUCCESS] %s%s\n", Green, msg, Reset)
 }
 
-// PrintAvailability prints an availability message in green with timestamp.
+// PrintAvailability prints an availability message in green without timestamp (cleaner).
 func PrintAvailability(format string, args ...interface{}) {
-	timestamp := time.Now().Format("15:04:05.000")
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s%s [AVAILABLE] %s%s\n", White, timestamp, Green+msg, Reset)
+	fmt.Printf("%s[AVAILABLE] %s%s\n", Green, msg, Reset)
 }
 
-// PrintRateLimit prints a rate limit message in yellow with timestamp.
+// PrintRateLimit prints a rate limit message in yellow without timestamp (cleaner).
 func PrintRateLimit(format string, args ...interface{}) {
-	timestamp := time.Now().Format("15:04:05.000")
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s%s [RATELIMIT] %s%s\n", White, timestamp, Yellow+msg, Reset)
+	fmt.Printf("%s[RATELIMIT] %s%s\n", Yellow, msg, Reset)
 }
 
-// PrintProxySwitch prints a proxy switch message in yellow with timestamp.
+// PrintProxySwitch prints a proxy switch message in yellow without timestamp (cleaner).
 func PrintProxySwitch(format string, args ...interface{}) {
-	timestamp := time.Now().Format("15:04:05.000")
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s%s [PROXY] %s%s\n", White, timestamp, Yellow+msg, Reset)
+	fmt.Printf("%s[PROXY] %s%s\n", Yellow, msg, Reset)
 }
 
-// PrintError prints an error message in red with timestamp.
+// PrintError prints an error message in red without timestamp (cleaner).
 func PrintError(format string, args ...interface{}) {
-	timestamp := time.Now().Format("15:04:05.000")
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s%s [ERROR] %s%s\n", White, timestamp, Red+msg, Reset)
+	fmt.Printf("%s[ERROR] %s%s\n", Red, msg, Reset)
 }
 
-// PrintCritical prints a critical error message in red with bold and timestamp.
+// PrintCritical prints a critical error message in red with bold without timestamp (cleaner).
 func PrintCritical(format string, args ...interface{}) {
-	timestamp := time.Now().Format("15:04:05.000")
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s%s [CRITICAL] %s%s%s\n", White, timestamp, Red+Bold, msg, Reset)
+	fmt.Printf("%s[CRITICAL] %s%s%s\n", Red+Bold, msg, Reset)
 }
 
-// PrintStatus prints a status message in cyan with timestamp.
+// PrintStatus prints a status message in cyan without timestamp (cleaner).
 func PrintStatus(format string, args ...interface{}) {
-	timestamp := time.Now().Format("15:04:05.000")
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s%s [INFO] %s%s\n", White, timestamp, Cyan+msg, Reset)
+	fmt.Printf("%s[INFO] %s%s\n", Cyan, msg, Reset)
 }
 
-// PrintInfo prints an informational message in white with timestamp.
+// PrintInfo prints an informational message in white without timestamp (cleaner).
 func PrintInfo(format string, args ...interface{}) {
-	timestamp := time.Now().Format("15:04:05.000")
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s%s [INFO] %s%s\n", White, timestamp, White+msg, Reset)
+	fmt.Printf("%s[INFO] %s%s\n", White, msg, Reset)
 }
 
 // PrintProgress prints a progress indicator.

@@ -84,15 +84,10 @@ func main() {
 	}
 
 	if config.UseProxies {
-		httpclient.PrintInfo("Loaded %d proxies", rotator.ProxyCount())
-	} else {
-		httpclient.PrintInfo("Proxy rotation disabled")
+		httpclient.PrintInfo("Proxies: %d", rotator.ProxyCount())
 	}
-
 	if config.UseTokens {
-		httpclient.PrintInfo("Loaded %d tokens", rotator.TokenCount())
-	} else {
-		httpclient.PrintInfo("Token rotation disabled")
+		httpclient.PrintInfo("Tokens: %d", rotator.TokenCount())
 	}
 
 	// Create middleware configuration for rate-limit defense
@@ -106,18 +101,6 @@ func main() {
 	}
 
 	middleware := httpclient.NewMiddleware(middlewareConfig, rotator)
-
-	// Step 3: Define target API endpoint URL, HTTP method, and JSON payload structure
-	httpclient.PrintStatus("Configuring HTTP client...")
-	httpclient.PrintInfo("HTTP Method: %s", config.Method)
-	httpclient.PrintInfo("Request Timeout: %d seconds", config.Timeout)
-	httpclient.PrintInfo("Base URL: %s", config.BaseURL)
-	if len(config.Payload) > 0 {
-		httpclient.PrintInfo("Payload: %+v", config.Payload)
-	}
-	if len(config.Headers) > 0 {
-		httpclient.PrintInfo("Custom Headers: %d", len(config.Headers))
-	}
 
 	// Create sniper configuration
 	sniperConfig := httpclient.SniperConfig{
@@ -143,7 +126,6 @@ func main() {
 		httpclient.PrintStatus("Generating %d random usernames...", config.UsernameCount)
 		usernames := generateRandomUsernames(config.UsernameCount, config.UsernameLength)
 		sniper.SetTargets(usernames)
-		httpclient.PrintInfo("Generated %d usernames", len(usernames))
 	} else {
 		// Load targets from file
 		httpclient.PrintStatus("Loading targets from %s...", config.TargetFile)
@@ -154,9 +136,7 @@ func main() {
 	}
 
 	// Step 5: Launch real-time terminal UI dashboard in concurrent ticker routine
-	// The dashboard is automatically started by sniper.Execute() and runs in background
-	httpclient.PrintStatus("Starting real-time dashboard...")
-	httpclient.PrintInfo("Dashboard will display: checks, availability, claims, errors, rate limits, req/s")
+	httpclient.PrintStatus("List checker active. Press Ctrl+C to stop.")
 
 	// Step 6: Handle graceful shutdown (SIGINT/Ctrl+C) to print summary stats before exiting
 	sigChan := make(chan os.Signal, 1)
@@ -182,7 +162,7 @@ func main() {
 	// Wait for completion or interrupt
 	select {
 	case <-done:
-		httpclient.PrintSuccess("Execution completed successfully")
+		httpclient.PrintSuccess("Username claimed! (%d checks)", resultCount)
 	case <-sigChan:
 		httpclient.PrintStatus("Received interrupt signal, shutting down gracefully...")
 		httpclient.PrintInfo("Processed %d results before shutdown", resultCount)
