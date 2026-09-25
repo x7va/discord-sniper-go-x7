@@ -314,7 +314,6 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 		}
 
 		body = bytes.NewReader(jsonData)
-		log.Printf("DEBUG: [WORKER %d] Sending request for username %s", workerID, target)
 	}
 
 	// Create HTTP request
