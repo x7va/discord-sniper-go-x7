@@ -138,7 +138,9 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 			if len(body) > 0 {
 				var discordResponse map[string]interface{}
 				if err := json.Unmarshal(body, &discordResponse); err == nil {
-					// Check if "taken" field exists and is false (username available)
+					log.Printf("DEBUG: Discord response: %s", string(body))
+
+					// Check if "taken" field exists
 					if taken, exists := discordResponse["taken"]; exists {
 						if takenBool, ok := taken.(bool); ok {
 							if !takenBool {
@@ -151,7 +153,20 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 								return "taken", false
 							}
 						}
+					} else {
+						// If "taken" field doesn't exist, this might be an error response
+						// Check for error message field
+						if message, exists := discordResponse["message"]; exists {
+							log.Printf("ERROR: Discord returned error: %v", message)
+							return "error", false
+						}
+						// If no "taken" field and no error, treat as taken (safer default)
+						log.Printf("INFO: No 'taken' field in response, assuming username is taken")
+						return "taken", false
 					}
+				} else {
+					log.Printf("ERROR: Failed to parse Discord response: %v", err)
+					return "error", false
 				}
 			}
 

@@ -231,6 +231,10 @@ func (s *Sniper) worker(targetChan <-chan string, workerID int) {
 				} else if result.Identifier == "taken" {
 					// Username is taken, just log it
 					PrintInfo("@%s is taken (%.4fms)", result.Target, float64(result.Latency.Microseconds())/1000)
+				} else if result.Identifier == "error" {
+					// Discord returned an error response
+					s.metrics.IncrementErrors()
+					PrintError("Discord API error for @%s", result.Target)
 				} else {
 					// Generic success response
 					s.metrics.IncrementAvailableStatus()

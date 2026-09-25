@@ -287,7 +287,7 @@ func interactiveConfig() Config {
 
 // generateRandomUsernames generates random usernames of specified length
 func generateRandomUsernames(count, length int) []string {
-	charset := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+	charset := "abcdefghijklmnopqrstuvwxyz0123456789_"
 
 	usernames := make([]string, 0, count)
 	attempts := 0
