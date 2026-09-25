@@ -196,9 +196,9 @@ func main() {
 // interactiveConfig provides an interactive menu for configuration
 func interactiveConfig() Config {
 	config := Config{
-		Workers:          10,
+		Workers:          5, // Reduced for slow proxies (10->5)
 		Method:           "POST",
-		Timeout:          30, // Increased timeout for slow proxies
+		Timeout:          60, // Increased timeout for slow proxies (30->60)
 		BaseURL:          "https://discord.com/api/v9/unique-username/username-attempt-unauthed",
 		ProxyFile:        "proxies.txt",
 		TokenFile:        "tokens.txt",
