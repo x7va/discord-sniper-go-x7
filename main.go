@@ -199,7 +199,7 @@ func interactiveConfig() Config {
 		Workers:          10,
 		Method:           "POST",
 		Timeout:          30, // Increased timeout for slow proxies
-		BaseURL:          "https://discord.com/api/v9/users/@me/pomelo-attempt",
+		BaseURL:          "https://discord.com/api/v9/unique-username/username-attempt-unauthed",
 		ProxyFile:        "proxies.txt",
 		TokenFile:        "tokens.txt",
 		TargetFile:       "targets.txt",
@@ -215,9 +215,7 @@ func interactiveConfig() Config {
 		Payload: map[string]interface{}{
 			"username": "TARGET_PLACEHOLDER",
 		},
-		Headers: map[string]string{
-			"Orgin": "https://discord.com/",
-		},
+		Headers: map[string]string{},
 	}
 
 	fmt.Println("\n=== Interactive Configuration ===")

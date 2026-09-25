@@ -145,28 +145,25 @@ func (m *Middleware) HandleSuccess(resp *http.Response, body []byte) (identifier
 			}
 			log.Printf("DEBUG: Discord response for username %s: %s", username, string(body))
 
-			// EXACT logic from working Python checker:
-			// Only process if "taken" field exists
-			if taken, exists := discordResponse["taken"]; exists {
-				if takenBool, ok := taken.(bool); ok {
-					if !takenBool {
-						// Username is available (taken = false)
-						log.Printf("SUCCESS: Username is available (taken=false)")
-						return "available", m.config.StopOnSuccess
-					} else {
-						// Username is taken (taken = true)
-						log.Printf("INFO: Username is taken (taken=true)")
-						return "taken", false
-					}
+			// EXACT logic from working x7va JavaScript checker:
+			// taken defaults to true if field is missing
+			var taken bool = true // Default to taken (safer)
+			if takenField, exists := discordResponse["taken"]; exists {
+				if takenBool, ok := takenField.(bool); ok {
+					taken = takenBool
 				}
+			}
+
+			available := !taken
+
+			if available {
+				// Username is available (taken = false or missing)
+				log.Printf("SUCCESS: Username is available (taken=%v)", taken)
+				return "available", m.config.StopOnSuccess
 			} else {
-				// If "taken" field doesn't exist, it's an error (per Python logic)
-				if message, exists := discordResponse["message"]; exists {
-					log.Printf("ERROR: Error validating username: %v", message)
-				} else {
-					log.Printf("ERROR: Unknown response format - no 'taken' field")
-				}
-				return "error", false
+				// Username is taken (taken = true)
+				log.Printf("INFO: Username is taken (taken=%v)", taken)
+				return "taken", false
 			}
 		} else {
 			log.Printf("ERROR: Failed to parse Discord response: %v, raw body: %s", err, string(body))

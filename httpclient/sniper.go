@@ -329,14 +329,15 @@ func (s *Sniper) executeRequest(target string, workerID int) Result {
 		}
 	}
 
-	// Set headers - match Python code exactly
-	if token != "" {
+	// Set headers - match working x7va JavaScript code exactly
+	// Only set Authorization if using authenticated endpoint
+	if token != "" && !strings.Contains(s.baseURL, "unauthed") {
 		req.Header.Set("Authorization", token)
 	}
-	// Always set Content-Type like Python code (not conditional on body)
-	req.Header.Set("Content-Type", "Application/json")
-	// Set User-Agent to match Python code
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	// Set Content-Type to match x7va code (lowercase)
+	req.Header.Set("Content-Type", "application/json")
+	// Set User-Agent to match x7va code
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
 	for key, value := range s.config.Headers {
 		req.Header.Set(key, value)
 	}

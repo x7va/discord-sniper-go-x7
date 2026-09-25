@@ -100,15 +100,11 @@ Create a `config.json` file for advanced configuration:
   "proxy_file": "proxies.txt",
   "token_file": "tokens.txt",
   "target_file": "targets.txt",
-  "base_url": "https://discord.com/api/v9/users/@me/pomelo-attempt",
+  "base_url": "https://discord.com/api/v9/unique-username/username-attempt-unauthed",
   "payload": {
     "username": "TARGET_PLACEHOLDER"
   },
-  "headers": {
-    "Content-Type": "Application/json",
-    "Orgin": "https://discord.com/",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-  },
+  "headers": {},
   "success_codes": [200],
   "max_error_rate": 50,
   "rate_limit_backoff": 5,
@@ -168,7 +164,7 @@ The main application uses an interactive configuration menu that prompts for:
 - Stop on success behavior
 
 ### Discord-Specific Settings
-- **Base URL**: `https://discord.com/api/v9/users/@me/pomelo-attempt` (Discord username check endpoint)
+- **Base URL**: `https://discord.com/api/v9/unique-username/username-attempt-unauthed` (Discord unauthenticated username check endpoint)
 - **HTTP Method**: POST (for username availability checking)
 - **Username Validation**: Built-in Discord username requirements
 - **Request Delay**: 3 seconds when no proxies used (rate limiting)
@@ -178,7 +174,7 @@ The main application uses an interactive configuration menu that prompts for:
 Workers:          10
 Method:           "POST"
 Timeout:          30 seconds
-BaseURL:          "https://discord.com/api/v9/users/@me/pomelo-attempt"
+BaseURL:          "https://discord.com/api/v9/unique-username/username-attempt-unauthed"
 UsernameLength:   6 characters (minimum 2 for Discord)
 RequestDelay:     3 seconds (no proxy mode)
 MaxErrorRate:     200 errors/minute
